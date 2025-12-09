@@ -1,0 +1,165 @@
+// Fonts
+@import url('https://fonts.bunny.net/css?family=Inter:400,600,700');
+
+// Variables
+@import 'variables';
+
+// Ganti font default Bootstrap ke Inter
+$font-family-sans-serif: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+
+// Bootstrap
+@import 'bootstrap/scss/bootstrap';
+
+/*
+|--------------------------------------------------------------------------
+| CSS Kustom (Versi Rombak Total - Light Gradient Sidebar)
+|--------------------------------------------------------------------------
+*/
+
+$sidebar-width: 250px;
+
+#app {
+    min-height: 100vh;
+    min-height: 100dvh;
+    overflow-x: hidden;
+}
+
+.sidebar-wrapper {
+    width: $sidebar-width;
+    transition: margin-left 0.3s ease;
+    overflow-y: auto;
+    flex-shrink: 0;
+    
+    // === INI GRADASI YANG ANDA MINTA ===
+    background-image: linear-gradient(to top, #f8f9fa 0%, #ffffff 100%);
+    border-right: 1px solid #dee2e6;
+}
+
+#page-content-wrapper {
+    flex-grow: 1;
+    min-width: 0;
+    // background: linear-gradient(135deg, #ece9e6 0%, #ffffff 100%);
+    background: #ece9e6;
+    overflow-y: auto;
+    height: 100vh;
+    height: 100dvh;
+}
+
+/* --- Responsive & Toggled --- */
+@media (min-width: 769px) {
+    #app.sidebar-toggled .sidebar-wrapper { margin-left: -$sidebar-width; }
+    #app.sidebar-toggled #page-content-wrapper { margin-left: 0; }
+}
+
+@media (max-width: 768px) {
+    .sidebar-wrapper {
+        position: fixed;
+        top: 0;
+        left: 0;
+        height: 100%;
+        z-index: 1001;
+        margin-left: -$sidebar-width;
+    }
+    #page-content-wrapper {
+        width: 100%;
+        margin-left: 0 !important;
+    }
+    #app.sidebar-toggled .sidebar-wrapper { margin-left: 0; }
+}
+
+/* --- Styling Menu Sidebar (Light Theme Keren) --- */
+.sidebar-wrapper .list-group-item {
+    background-color: transparent; // Transparan agar gradasi terlihat
+    border: 0;
+    border-radius: 0;
+    color: #495057; // Teks abu-abu gelap
+    font-size: 0.95rem;
+    font-weight: 600;
+    padding: 0.9rem 1.25rem;
+    transition: all 0.2s ease-in-out;
+
+    &:hover, &:focus {
+        background-color: #e9ecef !important; // Hover abu-abu
+        color: #0d6efd; // Hover biru
+    }
+
+    // Link Aktif (biru)
+    &.active {
+        background-color: #0d6efd !important;
+        color: white !important;
+        box-shadow: 0 4px 12px rgba(13, 110, 253, 0.2);
+        border-radius: 0.5rem !important;
+        margin: 0.25rem 1rem;
+        padding: 0.9rem 1.25rem;
+    }
+}
+
+// === INI PERBAIKAN BUG SUBMENU "HITAM" ===
+.submenu .list-group-item {
+    background-color: transparent !important; // Buat transparan (bukan hitam)
+    color: #6c757d; // Teks lebih redup
+    font-weight: 400;
+    padding-left: 3.25rem;
+    box-shadow: none;
+    margin: 0;
+    border-radius: 0 !important;
+
+    &.active, &:hover, &:focus {
+        background-color: #e9ecef !important; // Background abu-abu
+        color: #0d6efd !important; // Teks biru
+    }
+}
+
+// Navbar atas (di dalam konten)
+#page-content-wrapper .navbar {
+    background-color: #ffffff !important;
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+}
+
+/* --- Style Kartu KPI (Sudah Benar) --- */
+.border-start-primary { border-left: .25rem solid #4e73df !important; }
+.border-start-success { border-left: .25rem solid #1cc88a !important; }
+.border-start-info { border-left: .25rem solid #36b9cc !important; }
+.border-start-warning { border-left: .25rem solid #f6c23e !important; }
+.text-xs { font-size: .8rem; }
+.text-gray-800 { color: #3a3b45 !important; }
+
+/*
+|--------------------------------------------------------------------------
+| Styling Kustom untuk DataTables
+|--------------------------------------------------------------------------
+*/
+// Rapikan layout search dan show entries
+div.dt-container .dt-layout-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem 0;
+}
+
+// Pastikan tabelnya 100% width
+table.dataTable {
+    width: 100% !important;
+}
+
+// Styling untuk font kecil
+.table-sm {
+    font-size: 0.9rem; // Perkecil font
+}
+.table-sm td,
+.table-sm th {
+    padding: 0.5rem; // Perkecil padding
+}
+
+#sidebarClose {
+    position: absolute;
+    top: 1.1rem;
+    right: 7px;
+    z-index: 1002; /* Pastikan di atas elemen lain */
+    
+    /* Beri sedikit bayangan agar terlihat jelas */
+    filter: drop-shadow(0 1px 1px rgba(0,0,0,0.2)); 
+    // left: 20px;
+}
