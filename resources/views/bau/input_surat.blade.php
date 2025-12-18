@@ -1,174 +1,157 @@
 @extends('layouts.app')
 
 @push('styles')
+{{-- CSS Select2 --}}
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+{{-- CSS Bootstrap 5 Theme untuk Select2 --}}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" />
+
 <style>
-    /* Style 13px (dari file Anda sebelumnya) */
+    /* Style 13px */
     .card-body .form-label,
     .card-body .form-control,
-    .card-body .form-select {
+    .card-body .form-select,
+    .select2-container--bootstrap-5 .select2-selection {
         font-size: 13px;
     }
     .card-body .form-control,
     .card-body .form-select {
          padding: 0.3rem 0.6rem; 
     }
-
-    /* BARU: Sembunyikan dropdown Satker/Pegawai by default */
-    #kolomTujuanSatker,
-    #kolomTujuanPegawai {
-        display: none;
-    }
 </style>
 @endpush
 
-
 @section('content')
 <div class="container-fluid px-4">
-    
-    <div class="card shadow-sm border-0">
+    <div class="card shadow-sm border-0 mb-4">
         <div class="card-header py-3 bg-light border-0">
-            <div class="d-flex justify-content-between align-items-center">
-                <h6 class="m-0 fw-bold text-primary"><i class="bi bi-envelope-plus-fill me-2"></i> Input Surat Masuk Baru</h6>
-                <a href="{{ route('bau.surat.index') }}" class="btn btn-sm btn-outline-secondary">
-                    <i class="bi bi-arrow-left me-1"></i> Kembali
-                </a>
-            </div>
+            <h6 class="m-0 fw-bold text-primary">Input Surat Masuk Baru</h6>
         </div>
-        <div class="card-body p-4">
-            
+        <div class="card-body">
+            @if ($errors->any())
+                <div class="alert alert-danger">
+                    <ul class="mb-0">
+                        @foreach ($errors->all() as $error)
+                            <li>{{ $error }}</li>
+                        @endforeach
+                    </ul>
+                </div>
+            @endif
+
             <form action="{{ route('bau.surat.store') }}" method="POST" enctype="multipart/form-data">
                 @csrf
                 
-                <h6 class="text-muted mb-3 fw-bold">Informasi Surat</h6>
-
-                <div class="row mb-3">
-                    <div class="col-md-6">
-                        <label for="surat_dari" class="form-label">Surat dari: <span class="text-danger">*</span></label>
-                        <input type="text" class="form-control" id="surat_dari" name="surat_dari" required>
-                    </div>
-                    <div class="col-md-6">
-                        <label for="tipe_surat" class="form-label">Tipe Surat: <span class="text-danger">*</span></label>
-                        <select class="form-select" id="tipe_surat" name="tipe_surat" required>
-                            <option value="eksternal">Eksternal</option>
-                            <option value="internal">Internal</option>
-                        </select>
-                    </div>
-                </div>
-
-                <div class="row mb-3">
-                    <div class="col-md-6">
-                        <label for="nomor_surat" class="form-label">Nomor Surat: <span class="text-danger">*</span></label>
-                        <input type="text" class="form-control" id="nomor_surat" name="nomor_surat" required>
-                    </div>
-                    <div class="col-md-6">
-                        <label for="tanggal_surat" class="form-label">Tanggal Surat: <span class="text-danger">*</span></label>
-                        <input type="date" class="form-control" id="tanggal_surat" name="tanggal_surat" required>
-                    </div>
-                </div>
-
-                <div class="mb-3">
-                    <label for="perihal" class="form-label">Perihal: <span class="text-danger">*</span></label>
-                    <textarea class="form-control" id="perihal" name="perihal" rows="3" required></textarea>
-                </div>
-                
-
-                {{-- 
-                  ====================================================
-                  PERUBAHAN BESAR: Dropdown Tujuan Dinamis
-                  ====================================================
-                --}}
-                
-                <h6 class="text-muted mb-3 mt-4 fw-bold">Tujuan Surat</h6>
-                
                 <div class="row">
-                    <div class="col-md-4">
+                    <!-- KOLOM KIRI -->
+                    <div class="col-md-6">
                         <div class="mb-3">
-                            <label for="tujuan_tipe" class="form-label">Tipe Tujuan: <span class="text-danger">*</span></label>
-                            <select class="form-select" id="tujuan_tipe" name="tujuan_tipe" required>
-                                <option value="">-- Pilih Tipe Tujuan --</option>
-                                <option value="rektor">Rektor</option>
-                                <option value="satker">Satker (Perlu Disposisi)</option>
-                                <option value="pegawai">Pegawai (Langsung ke Ybs)</option>
-                                <option value="edaran_semua_satker">Edaran (Ke Semua Satker)</option>
+                            <label class="form-label">Surat Dari</label>
+                            <input type="text" name="surat_dari" class="form-control" value="{{ old('surat_dari') }}" required placeholder="Nama Instansi Pengirim">
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label">Tipe Surat</label>
+                            <select name="tipe_surat" class="form-select" required>
+                                <option value="eksternal" {{ old('tipe_surat') == 'eksternal' ? 'selected' : '' }}>Eksternal</option>
+                                <option value="internal" {{ old('tipe_surat') == 'internal' ? 'selected' : '' }}>Internal</option>
                             </select>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Nomor Surat</label>
+                            <input type="text" name="nomor_surat" class="form-control" value="{{ old('nomor_surat') }}" required>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Tanggal Surat</label>
+                            <input type="date" name="tanggal_surat" class="form-control" value="{{ old('tanggal_surat') }}" required>
                         </div>
                     </div>
 
-                    {{-- Kolom Tujuan Satker (Muncul jika 'satker' dipilih) --}}
-                    <div class="col-md-8" id="kolomTujuanSatker">
+                    <!-- KOLOM KANAN -->
+                    <div class="col-md-6">
                         <div class="mb-3">
-                            <label for="tujuan_satker_id" class="form-label">Pilih Satker: <span class="text-danger">*</span></label>
-                            <select class="form-select" id="tujuan_satker_id" name="tujuan_satker_id">
-                                <option value="">-- Pilih Satuan Kerja --</option>
-                                @foreach ($daftarSatker as $satker)
-                                    <option value="{{ $satker->id }}">{{ $satker->nama_satker }}</option>
-                                @endforeach
+                            <label class="form-label">No. Agenda</label>
+                            <input type="text" name="no_agenda" class="form-control" value="{{ old('no_agenda') }}" required>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Diterima Tanggal</label>
+                            <input type="date" name="diterima_tanggal" class="form-control" value="{{ old('diterima_tanggal', date('Y-m-d')) }}" required>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Sifat Surat</label>
+                            <select name="sifat" class="form-select" required>
+                                <option value="Asli" {{ old('sifat') == 'Asli' ? 'selected' : '' }}>Asli</option>
+                                <option value="Tembusan" {{ old('sifat') == 'Tembusan' ? 'selected' : '' }}>Tembusan</option>
                             </select>
                         </div>
-                    </div>
 
-                    {{-- Kolom Tujuan Pegawai (Muncul jika 'pegawai' dipilih) --}}
-                    <div class="col-md-8" id="kolomTujuanPegawai">
                         <div class="mb-3">
-                            <label for="tujuan_user_id" class="form-label">Pilih Pegawai: <span class="text-danger">*</span></label>
-                            <select class="form-select" id="tujuan_user_id" name="tujuan_user_id">
-                                <option value="">-- Pilih Pegawai --</option>
-                                @foreach ($daftarPegawai as $pegawai)
-                                    <option value="{{ $pegawai->id }}">
-                                        {{ $pegawai->name }} 
-                                        ({{ $pegawai->satker->singkatan ?? 'Belum ada Satker' }})
-                                    </option>
-                                @endforeach
-                            </select>
+                            <label class="form-label">File Surat (PDF/Gambar, Max 10MB)</label>
+                            <input type="file" name="file_surat" class="form-control" accept=".pdf,.jpg,.jpeg,.png" required>
                         </div>
-                    </div>
-                </div>
-
-                {{-- ================= END PERUBAHAN ================= --}}
-
-                <hr class="my-4">
-
-                <h6 class="text-muted mb-3 fw-bold">Informasi Agenda & File</h6>
-
-                <div class="row mb-3">
-                    <div class="col-md-4">
-                        <label for="no_agenda" class="form-label">No. Agenda: <span class="text-danger">*</span></label>
-                        <input type="text" class="form-control" id="no_agenda" name="no_agenda" required>
-                    </div>
-                    <div class="col-md-4">
-                        <label for="diterima_tanggal" class="form-label">Diterima Tanggal: <span class="text-danger">*</span></label>
-                        <input type="date" class="form-control" id="diterima_tanggal" name="diterima_tanggal" value="{{ date('Y-m-d') }}" required>
-                    </div>
-                    <div class="col-md-4">
-                        <label for="sifat" class="form-label">Sifat: <span class="text-danger">*</span></label>
-                        <select class="form-select" id="sifat" name="sifat" required>
-                            <option value="Asli">Asli</option>
-                            <option value="Tembusan">Tembusan</option>
-                        </select>
                     </div>
                 </div>
 
                 <div class="mb-3">
-                    <label for="file_surat" class="form-label">Upload Scan Surat (PDF/JPG): <span class="text-danger">*</span></label>
-                    <input class="form-control" type="file" id="file_surat" name="file_surat" accept=".pdf,.jpg,.jpeg,.png" required>
+                    <label class="form-label">Perihal</label>
+                    <textarea name="perihal" class="form-control" rows="2" required>{{ old('perihal') }}</textarea>
                 </div>
 
-                {{-- 
-                  ====================================================
-                  PERUBAHAN: Tombol Aksi
-                  Hanya ada satu tombol "Simpan". 
-                  Logika "Teruskan" vs "Draft" dihapus dan diganti 
-                  logika "Tujuan" di Controller.
-                  ====================================================
-                --}}
-                <div class="row mt-4">
-                    <div class="col-md-12">
-                        <button type="submit" class="btn btn-primary btn-lg w-100">
-                            <i class="bi bi-save-fill me-2"></i> Simpan Surat
-                        </button>
-                    </div>
+                <hr>
+
+                <!-- TUJUAN SURAT -->
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Tujuan Surat</label>
+                    <select name="tujuan_tipe" id="tujuan_tipe" class="form-select border-primary" required>
+                        <option value="">-- Pilih Tipe Tujuan --</option>
+                        
+                        {{-- Opsi 1: Rektor / Universitas (Satu Jalur: Disposisi) --}}
+                        <option value="universitas" {{ old('tujuan_tipe') == 'universitas' ? 'selected' : '' }}>Rektor / Universitas (Disposisi)</option>
+                        
+                        {{-- Opsi 2: Satker (Langsung) --}}
+                        <option value="satker" {{ old('tujuan_tipe') == 'satker' ? 'selected' : '' }}>Satker (Langsung)</option>
+                        
+                        {{-- Opsi 3: Pegawai (Langsung) --}}
+                        <option value="pegawai" {{ old('tujuan_tipe') == 'pegawai' ? 'selected' : '' }}>Pegawai/Dosen (Langsung)</option>
+                        
+                    </select>
                 </div>
 
+                <!-- PILIH SATKER (Muncul jika 'satker' dipilih) -->
+                <div class="mb-3" id="div_tujuan_satker" style="display: none;">
+                    <label class="form-label">Pilih Satker Tujuan</label>
+                    <select name="tujuan_satker_id" id="tujuan_satker_id" class="form-select select2">
+                        <option value="">-- Cari Satker --</option>
+                        @foreach ($daftarSatker as $satker)
+                            <option value="{{ $satker->id }}">{{ $satker->nama_satker }}</option>
+                        @endforeach
+                    </select>
+                </div>
+
+                <!-- PILIH PEGAWAI (Muncul jika 'pegawai' dipilih) -->
+                <div class="mb-3" id="div_tujuan_pegawai" style="display: none;">
+                    <label class="form-label">Pilih Pegawai Tujuan</label>
+                    <select name="tujuan_user_id" id="tujuan_user_id" class="form-select select2">
+                        <option value="">-- Cari Pegawai --</option>
+                        @foreach ($daftarPegawai as $pegawai)
+                            <option value="{{ $pegawai->id }}">
+                                {{ $pegawai->name }} - {{ $pegawai->satker->nama_satker ?? '-' }}
+                            </option>
+                        @endforeach
+                    </select>
+                </div>
+
+                <div class="d-flex justify-content-end mt-4">
+                    @php
+                        $previousUrl = url()->previous();
+                        $routeBatal = str_contains($previousUrl, 'internal') ? route('bau.surat.internal') : route('bau.surat.eksternal');
+                    @endphp
+                    <a href="{{ $routeBatal}}" class="btn btn-secondary me-2">Batal</a>
+                    <button type="submit" class="btn btn-primary"><i class="bi bi-save me-2"></i> Simpan Surat</button>
+                </div>
             </form>
         </div>
     </div>
@@ -176,40 +159,60 @@
 @endsection
 
 @push('scripts')
-{{-- 
-  ====================================================
-  SCRIPT BARU: Untuk menampilkan dropdown dinamis
-  ====================================================
---}}
+{{-- JQuery (Wajib untuk Select2) --}}
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+{{-- Script Select2 --}}
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+
 <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        const tipeTujuan = document.getElementById('tujuan_tipe');
-        const kolomSatker = document.getElementById('kolomTujuanSatker');
-        const kolomPegawai = document.getElementById('kolomTujuanPegawai');
-        const selectSatker = document.getElementById('tujuan_satker_id');
-        const selectPegawai = document.getElementById('tujuan_user_id');
-
-        tipeTujuan.addEventListener('change', function() {
-            // Ambil nilai yang dipilih
-            const pilihan = this.value;
-
-            // Sembunyikan semua & reset 'required'
-            kolomSatker.style.display = 'none';
-            selectSatker.required = false;
-            kolomPegawai.style.display = 'none';
-            selectPegawai.required = false;
-
-            if (pilihan === 'satker') {
-                // Tampilkan Satker
-                kolomSatker.style.display = 'block';
-                selectSatker.required = true;
-            } else if (pilihan === 'pegawai') {
-                // Tampilkan Pegawai
-                kolomPegawai.style.display = 'block';
-                selectPegawai.required = true;
-            }
-            // Jika 'rektor', tidak ada yang ditampilkan (sudah benar)
+    $(document).ready(function() {
+        
+        // 1. Inisialisasi Select2 pada class .select2
+        $('.select2').select2({
+            theme: 'bootstrap-5', 
+            width: '100%',        
+            placeholder: 'Silakan pilih...',
+            allowClear: true
         });
+
+        // 2. Logika Tampilan Dropdown Tujuan
+        const tipeSelect = $('#tujuan_tipe');
+        const divSatker = $('#div_tujuan_satker');
+        const divPegawai = $('#div_tujuan_pegawai');
+        
+        const selectSatker = $('#tujuan_satker_id');
+        const selectPegawai = $('#tujuan_user_id');
+
+        function toggleTujuan() {
+            const val = tipeSelect.val();
+            
+            // Sembunyikan semua dulu
+            divSatker.hide();
+            divPegawai.hide();
+
+            // Reset requirement
+            selectSatker.prop('required', false);
+            selectPegawai.prop('required', false);
+
+            // Logika Tampilan
+            // Jika pilih 'universitas' (Rektor/Univ), inputan satker/pegawai TETAP DISEMBUNYIKAN
+            // karena akan diproses di Admin Rektor (Disposisi)
+            
+            if (val === 'satker') {
+                divSatker.show();
+                selectSatker.prop('required', true);
+            } 
+            else if (val === 'pegawai') {
+                divPegawai.show();
+                selectPegawai.prop('required', true);
+            }
+        }
+
+        // Jalankan saat change
+        tipeSelect.on('change', toggleTujuan);
+        
+        // Jalankan saat load
+        toggleTujuan();
     });
 </script>
 @endpush

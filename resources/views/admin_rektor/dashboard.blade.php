@@ -1,264 +1,157 @@
 @extends('layouts.app')
 
-{{-- 
-  ====================================================
-  TAMBAHAN 1: CSS & Style Kustom
-  ====================================================
---}}
 @push('styles')
-{{-- Kita tidak pakai DataTables di sini, jadi CSS-nya dihapus --}}
-{{-- <link href="https://cdn.datatables.net/v/bs5/dt-2.1.0/datatables.min.css" rel="stylesheet"> --}}
-
 <style>
-    /* 1. Set font tabel HANYA untuk tabel tindakan cepat */
-    #tabelTindakanCepat {
-        font-size: 13px !important; 
-    }
-
-    /* 2. Style untuk Kartu KPI (Mirip BAU) */
-    .border-start-primary { border-left: .25rem solid #4e73df !important; }
-    .border-start-success { border-left: .25rem solid #1cc88a !important; }
-    .border-start-info { border-left: .25rem solid #36b9cc !important; }
-    .text-xs { font-size: .8rem; }
-    .text-gray-800 { color: #3a3b45; }
-    .card-body .h5 { font-size: 1.5rem !important; font-weight: 700 !important; }
-    .card-body .h2.text-muted { font-size: 2rem !important; }
-    .card-header h6 { font-size: 14px !important; }
+    /* Style Kartu KPI */
+    .border-left-primary { border-left: 0.25rem solid #4e73df !important; }
+    .border-left-success { border-left: 0.25rem solid #1cc88a !important; }
+    .border-left-info    { border-left: 0.25rem solid #36b9cc !important; }
+    .text-xs { font-size: .7rem; }
+    .text-gray-300 { color: #dddfeb !important; }
+    .text-gray-800 { color: #5a5c69 !important; }
+    .fw-bold { font-weight: 700 !important; }
+    .h5 { font-size: 1.25rem; }
+    
+    /* Chart Container */
+    .chart-area { position: relative; height: 250px; width: 100%; }
+    .chart-pie { position: relative; height: 195px; width: 100%; }
 </style>
 @endpush
-
 
 @section('content')
 <div class="container-fluid px-4">
 
-    {{-- 
-      ====================================================
-      BAGIAN 1: KARTU KPI
-      ====================================================
-    --}}
+    {{-- BAGIAN 1: KARTU KPI --}}
     <div class="row">
         <div class="col-xl-4 col-md-6 mb-4">
-            <div class="card border-start-primary shadow h-100 py-2">
+            <div class="card border-left-primary shadow h-100 py-2">
                 <div class="card-body">
                     <div class="row no-gutters align-items-center">
-                        <div class="col me-2">
-                            <div class="text-xs fw-bold text-primary text-uppercase mb-1">
-                                Perlu Disposisi</div>
-                            {{-- Variabel $perluDisposisi ini datang dari Controller --}}
-                            <div class="h5 mb-0 fw-bold text-gray-800">{{ $perluDisposisi }}</div>
+                        <div class="col mr-2">
+                            <div class="text-xs fw-bold text-primary text-uppercase mb-1">Menunggu Disposisi</div>
+                            <div class="h5 mb-0 fw-bold text-gray-800">{{ $perluDisposisi }} Surat</div>
                         </div>
-                        <div class="col-auto">
-                            <i class="bi bi-person-workspace h2 text-muted"></i>
-                        </div>
+                        <div class="col-auto"><i class="bi bi-hourglass-split text-gray-300" style="font-size: 2rem;"></i></div>
                     </div>
                 </div>
             </div>
         </div>
         <div class="col-xl-4 col-md-6 mb-4">
-            <div class="card border-start-success shadow h-100 py-2">
+            <div class="card border-left-success shadow h-100 py-2">
                 <div class="card-body">
                     <div class="row no-gutters align-items-center">
-                        <div class="col me-2">
-                            <div class="text-xs fw-bold text-success text-uppercase mb-1">
-                                Sudah Didisposisi</div>
-                            {{-- Variabel $sudahDisposisi ini datang dari Controller --}}
-                            <div class="h5 mb-0 fw-bold text-gray-800">{{ $sudahDisposisi }}</div>
+                        <div class="col mr-2">
+                            <div class="text-xs fw-bold text-success text-uppercase mb-1">Selesai Didisposisi</div>
+                            <div class="h5 mb-0 fw-bold text-gray-800">{{ $sudahDisposisi }} Surat</div>
                         </div>
-                        <div class="col-auto">
-                            <i class="bi bi-send-check-fill h2 text-muted"></i>
-                        </div>
+                        <div class="col-auto"><i class="bi bi-check-circle-fill text-gray-300" style="font-size: 2rem;"></i></div>
                     </div>
                 </div>
             </div>
         </div>
         <div class="col-xl-4 col-md-6 mb-4">
-            <div class="card border-start-info shadow h-100 py-2">
+            <div class="card border-left-info shadow h-100 py-2">
                 <div class="card-body">
                     <div class="row no-gutters align-items-center">
-                        <div class="col me-2">
-                            <div class="text-xs fw-bold text-info text-uppercase mb-1">
-                                Total Surat Ditangani</div>
-                            {{-- Variabel $totalDiterima ini datang dari Controller --}}
-                            <div class="h5 mb-0 fw-bold text-gray-800">{{ $totalDiterima }}</div>
+                        <div class="col mr-2">
+                            <div class="text-xs fw-bold text-info text-uppercase mb-1">Total Ditangani</div>
+                            <div class="h5 mb-0 fw-bold text-gray-800">{{ $totalDiterima }} Surat</div>
                         </div>
-                        <div class="col-auto">
-                            <i class="bi bi-archive-fill h2 text-muted"></i>
-                        </div>
+                        <div class="col-auto"><i class="bi bi-folder2-open text-gray-300" style="font-size: 2rem;"></i></div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
 
-    {{-- 
-      ====================================================
-      BAGIAN 2: CHARTS
-      ====================================================
-    --}}
+    {{-- BAGIAN 2: CHARTS --}}
     <div class="row">
         <div class="col-xl-8 col-lg-7">
-            <div class="card shadow-sm border-0 mb-4">
-                <div class="card-header py-3 bg-light border-0">
-                    <h6 class="m-0 fw-bold text-primary">Tren Surat Diterima (7 Hari Terakhir)</h6>
-                </div>
+            <div class="card shadow mb-4">
+                <div class="card-header py-3"><h6 class="m-0 fw-bold text-primary">Tren Surat Masuk (7 Hari Terakhir)</h6></div>
                 <div class="card-body">
-                    <div class="chart-area" style="height: 220px;">
+                    <div class="chart-area">
                         <canvas id="trenSuratChart"></canvas>
                     </div>
                 </div>
             </div>
         </div>
-
         <div class="col-xl-4 col-lg-5">
-            <div class="card shadow-sm border-0 mb-4">
-                <div class="card-header py-3 bg-light border-0">
-                    <h6 class="m-0 fw-bold text-primary">Komposisi Tipe Surat</h6>
-                </div>
+            <div class="card shadow mb-4">
+                <div class="card-header py-3"><h6 class="m-0 fw-bold text-primary">Komposisi Surat (Internal vs Eksternal)</h6></div>
                 <div class="card-body">
-                    <div class="chart-pie pt-0" style="height: 220px;">
+                    <div class="chart-pie pt-2 pb-2">
                         <canvas id="komposisiSuratChart"></canvas>
+                    </div>
+                    <div class="mt-3 text-center small text-muted">
+                        *Data berdasarkan surat yang sudah diterima Rektor
                     </div>
                 </div>
             </div>
         </div>
     </div>
 
-
-    {{-- 
-      ====================================================
-      BAGIAN 3: TABEL DAFTAR KERJA (TINDAKAN CEPAT)
-      ====================================================
-    --}}
+    {{-- BAGIAN 3: TABEL TINDAKAN CEPAT --}}
     <div class="row">
         <div class="col-12">
-            <div class="card shadow-sm border-0 mb-4">
-                <div class="card-header py-3 bg-light border-0">
-                    <h6 class="m-0 fw-bold text-primary">Tindakan Cepat (5 Surat Terakhir Perlu Disposisi)</h6>
-                </div>
+            <div class="card shadow mb-4">
+                <div class="card-header py-3"><h6 class="m-0 fw-bold text-primary">Tindakan Cepat (Surat Baru Masuk)</h6></div>
                 <div class="card-body">
                     <div class="table-responsive">
-                        <table id="tabelTindakanCepat" class="table table-hover align-middle table-sm">
+                        <table class="table table-bordered table-hover" width="100%" cellspacing="0" style="font-size: 14px;">
                             <thead class="table-light">
                                 <tr>
-                                    <th scope="col" class="text-center">No. Agenda</th>
-                                    <th scope="col">Perihal</th>
-                                    <th scope="col">Asal Surat</th>
-                                    <th scope="col">Tanggal Diterima</th>
-                                    <th scope="col" class="text-center">Aksi</th>
+                                    <th>No Agenda</th><th>Asal Surat</th><th>Perihal</th><th>Tanggal Diterima</th><th class="text-center">Aksi</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {{-- Variabel $suratBaru ini datang dari Controller --}}
-                                @forelse ($suratBaru as $surat)
+                                @forelse($suratBaru as $surat)
                                 <tr>
-                                    <th scope="row" class="text-center">{{ $surat->no_agenda }}</th>
-                                    <td>{{ $surat->perihal }}</td>
+                                    <td>{{ $surat->no_agenda }}</td>
                                     <td>{{ $surat->surat_dari }}</td>
+                                    <td>{{ $surat->perihal }}</td>
                                     <td>{{ \Carbon\Carbon::parse($surat->diterima_tanggal)->isoFormat('D MMMM YYYY') }}</td>
                                     <td class="text-center">
-                                    <a href="{{ route('adminrektor.disposisi.show', $surat->id) }}" class="btn btn-primary btn-sm">
-                                        <i class="bi bi-pencil-square me-1"></i> Tindak Lanjuti
-                                    </a>
+                                        <a href="{{ route('adminrektor.disposisi.show', $surat->id) }}" class="btn btn-primary btn-sm shadow-sm"><i class="bi bi-pencil-square"></i> Proses</a>
                                     </td>
                                 </tr>
                                 @empty
-                                <tr>
-                                    <td colspan="5" class="text-center">
-                                        <i class="bi bi-check-circle-fill text-success me-2"></i>
-                                        Tidak ada surat baru yang memerlukan disposisi.
-                                    </td>
-                                </tr>
+                                <tr><td colspan="5" class="text-center py-3 text-muted">Tidak ada surat baru yang perlu didisposisi.</td></tr>
                                 @endforelse
                             </tbody>
                         </table>
                     </div>
                 </div>
-                {{-- Card-footer untuk link ke halaman penuh --}}
-                @if($perluDisposisi > 5)
-                <div class="card-footer text-center bg-light border-0">
-                    {{-- TODO: Nanti link ini harus diarahkan ke halaman 'surat masuk admin rektor' --}}
-                    <a href="#" class="btn btn-outline-primary btn-sm">
-                        Lihat Semua {{ $perluDisposisi }} Surat yang Perlu Disposisi
-                        <i class="bi bi-arrow-right-short ms-1"></i>
-                    </a>
-                </div>
-                @endif
             </div>
         </div>
     </div>
 </div>
 @endsection
 
-{{-- 
-  ====================================================
-  TAMBAHAN 2: Script Chart.js (DataTables Dihapus)
-  ====================================================
---}}
 @push('scripts')
-{{-- jQuery TETAP DIPERLUKAN untuk Chart.js --}}
 <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-{{-- DataTables dihapus --}}
-{{-- <script src="https://cdn.datatables.net/v/bs5/dt-2.1.0/datatables.min.js"></script> --}}
-
-{{-- Library Chart.js --}}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 
-
 <script>
-    // Ambil data dari Blade (dilempar oleh Controller)
-    const pieLabels = @json($pieLabels);
-    const pieData = @json($pieData);
+    // Data dari Controller
     const lineLabels = @json($lineLabels);
     const lineData = @json($lineData);
+    const pieLabels = @json($pieLabels);
+    const pieData = @json($pieData);
+
+    Chart.defaults.font.family = 'Nunito';
+    Chart.defaults.color = '#858796';
 
     $(document).ready(function() {
-        
-        // --- Inisialisasi DataTables DIHAPUS ---
-
-        // --- Inisialisasi Pie Chart (Komposisi Surat) ---
-        const ctxPie = document.getElementById('komposisiSuratChart');
-        if (ctxPie) {
-            new Chart(ctxPie, {
-                type: 'doughnut',
-                data: {
-                    labels: pieLabels,
-                    datasets: [{
-                        data: pieData,
-                        backgroundColor: ['#4e73df', '#1cc88a'],
-                        hoverBackgroundColor: ['#2e59d9', '#17a673'],
-                        hoverBorderColor: "rgba(234, 236, 244, 1)",
-                    }],
-                },
-                options: {
-                    maintainAspectRatio: false,
-                    responsive: true,
-                    plugins: {
-                        legend: {
-                            position: 'bottom',
-                        },
-                        tooltip: {
-                            callbacks: {
-                                label: function(context) {
-                                    let label = context.label || '';
-                                    let value = context.raw || 0;
-                                    return label + ': ' + value + ' surat';
-                                }
-                            }
-                        }
-                    }
-                },
-            });
-        }
-
-        // --- Inisialisasi Line Chart (Tren Surat) ---
-        const ctxLine = document.getElementById('trenSuratChart');
+        // 1. LINE CHART (TREN)
+        const ctxLine = document.getElementById("trenSuratChart");
         if (ctxLine) {
             new Chart(ctxLine, {
                 type: 'line',
                 data: {
                     labels: lineLabels,
                     datasets: [{
-                        label: "Jumlah Surat",
+                        label: "Surat Masuk",
                         lineTension: 0.3,
                         backgroundColor: "rgba(78, 115, 223, 0.05)",
                         borderColor: "rgba(78, 115, 223, 1)",
@@ -275,34 +168,45 @@
                 },
                 options: {
                     maintainAspectRatio: false,
-                    responsive: true,
-                    plugins: {
-                        legend: {
-                            display: false // Sembunyikan legenda
-                        },
-                        tooltip: {
-                            callbacks: {
-                                label: function(context) {
-                                    return 'Jumlah Surat: ' + context.raw;
-                                }
-                            }
-                        }
-                    },
+                    layout: { padding: { left: 10, right: 25, top: 25, bottom: 0 } },
                     scales: {
-                        x: {
-                            grid: {
-                                display: false
-                            }
-                        },
+                        x: { grid: { display: false, drawBorder: false }, ticks: { maxTicksLimit: 7 } },
                         y: {
+                            min: 0, // MULAI DARI 0
                             ticks: {
-                                // Pastikan hanya angka bulat (integer) di sumbu Y
-                                precision: 0 
+                                maxTicksLimit: 5,
+                                padding: 10,
+                                stepSize: 1, // KELIPATAN 1 (Bulat)
+                                precision: 0, // HINDARI DESIMAL
+                                callback: function(value) { if (value % 1 === 0) { return value; } }
                             },
-                            beginAtZero: true
-                        }
-                    }
+                            grid: { color: "rgb(234, 236, 244)", zeroLineColor: "rgb(234, 236, 244)", drawBorder: false, borderDash: [2], zeroLineBorderDash: [2] }
+                        },
+                    },
+                    plugins: { legend: { display: false } }
                 }
+            });
+        }
+
+        // 2. PIE CHART (KOMPOSISI)
+        const ctxPie = document.getElementById("komposisiSuratChart");
+        if (ctxPie) {
+            new Chart(ctxPie, {
+                type: 'doughnut',
+                data: {
+                    labels: pieLabels,
+                    datasets: [{
+                        data: pieData,
+                        backgroundColor: ['#4e73df', '#1cc88a', '#36b9cc'],
+                        hoverBackgroundColor: ['#2e59d9', '#17a673', '#2c9faf'],
+                        hoverBorderColor: "rgba(234, 236, 244, 1)",
+                    }],
+                },
+                options: {
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: true, position: 'bottom' } },
+                    cutout: '70%',
+                },
             });
         }
     });

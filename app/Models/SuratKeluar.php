@@ -9,30 +9,40 @@ class SuratKeluar extends Model
 {
     use HasFactory;
 
-    // Tentukan nama tabel jika berbeda dari 'surat_keluars'
-    // protected $table = 'surat_keluars';
-
     protected $fillable = [
         'nomor_surat',
+        'tipe_kirim',
         'tanggal_surat',
         'tujuan_surat',
+        'tujuan_satker_id', // Ini tetap ada tapi nanti bisa null
         'perihal',
         'file_surat',
         'user_id',
+        'tujuan_luar',
     ];
 
-    /**
-     * Tipe data untuk kolom tanggal
-     */
     protected $casts = [
         'tanggal_surat' => 'datetime',
     ];
 
-    /**
-     * Relasi ke user (Admin BAU) yang membuat surat ini.
-     */
     public function user()
     {
         return $this->belongsTo(User::class);
+    }
+
+    /**
+     * RELASI BARU: Ke Banyak Satker Penerima (Pivot)
+     */
+    public function penerimaInternal()
+    {
+        return $this->belongsToMany(Satker::class, 'surat_keluar_internal_penerima', 'surat_keluar_id', 'satker_id')
+                    ->withPivot('dibaca_pada')
+                    ->withTimestamps();
+    }
+    
+    // Helper untuk mengambil list nama penerima sebagai string
+    public function getListPenerimaAttribute()
+    {
+        return $this->penerimaInternal->pluck('nama_satker')->implode(', ');
     }
 }

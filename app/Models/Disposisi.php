@@ -13,7 +13,8 @@ class Disposisi extends Model
         'klasifikasi_id', 
         'tujuan_satker_id', 
         'catatan_rektor',
-        'disposisi_lain'
+        'disposisi_lain',
+        'status_penerimaan',
     ];
 
     // Definisikan relasi

@@ -169,7 +169,7 @@
                                     </td>
                                     <td>
                                         @if ($surat->status == 'baru_di_bau')
-                                            <a href="{{ route('bau.surat.index') }}" class="btn btn-sm btn-primary" title="Teruskan ke Rektor">
+                                            <a href="{{ route('bau.surat.eksternal') }}" class="btn btn-sm btn-primary" title="Teruskan ke Rektor">
                                                 <i class="bi bi-send-arrow-up-fill"></i> Teruskan
                                             </a>
                                         @elseif ($surat->status == 'didisposisi')
@@ -189,9 +189,9 @@
                     </div>
                 </div>
                 <div class="card-footer text-center bg-light border-0">
-                    <a href="{{ route('bau.surat.index') }}" class="btn btn-outline-primary btn-sm me-2">
-                        Lihat Daftar Surat Masuk
-                    </a>
+<a href="{{ route('bau.surat.eksternal') }}" class="btn btn-outline-primary btn-sm me-2">
+    Lihat Daftar Surat Masuk
+</a>
                     <a href="{{ route('bau.disposisi.index') }}" class="btn btn-outline-warning btn-sm">
                         Lihat Daftar Disposisi
                     </a>

@@ -5,9 +5,9 @@ namespace App\Http\Controllers\Satker;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use App\Models\Surat;
+use App\Models\Surat; // Surat Masuk (Eksternal)
+use App\Models\SuratKeluar; // Surat Keluar/Masuk (Internal)
 use App\Models\Satker;
-use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 
 class DashboardController extends Controller
@@ -17,77 +17,112 @@ class DashboardController extends Controller
         $user = Auth::user();
         $satkerId = $user->satker_id;
 
-        // 1. AMBIL SURAT DARI JALUR DISPOSISI
-        $suratDisposisi = Surat::whereHas('disposisis', function ($q) use ($satkerId) {
-            $q->where('tujuan_satker_id', $satkerId);
-        })->get();
+        // ====================================================================
+        // 1. PENGAMBILAN DATA (DATABASE QUERIES)
+        // ====================================================================
 
-        // 2. AMBIL SURAT DARI JALUR EDARAN
+        // A. Surat Masuk Eksternal (Dari Rektor/BAU via Disposisi)
+        // Kita ambil ID dan Tanggal saja untuk performa, karena hanya butuh hitungan
+        $suratDisposisi = Surat::select('id', 'diterima_tanggal')
+            ->whereHas('disposisis', function ($q) use ($satkerId) {
+                $q->where('tujuan_satker_id', $satkerId);
+            })->get();
+
+        // B. Surat Masuk Eksternal (Edaran)
         $satker = Satker::find($satkerId);
-        $suratEdaran = $satker->suratEdaran()->get();
+        $suratEdaran = $satker->suratEdaran()
+            ->select('surats.id', 'surats.diterima_tanggal')
+            ->get();
 
-        // 3. GABUNGKAN KEDUANYA
-        $allSuratMasuk = $suratDisposisi->merge($suratEdaran)->unique('id');
+        // C. Surat Masuk Internal (Dari Satker Lain via Pivot)
+        $suratMasukInternal = SuratKeluar::select('id', 'tanggal_surat')
+            ->where('tipe_kirim', 'internal')
+            ->whereHas('penerimaInternal', function($q) use ($satkerId) {
+                $q->where('satkers.id', $satkerId);
+            })->get();
+
+        // D. Surat Keluar (Internal & Eksternal milik user ini)
+        // Hitung total surat keluar (internal)
+        $totalSuratKeluar = SuratKeluar::where('tipe_kirim', 'internal')
+            ->where('user_id', $user->id)
+            ->count();
+
+
+        // ====================================================================
+        // 2. PENGGABUNGAN DATA (STANDARISASI)
+        // ====================================================================
+        
+        $allSuratMasuk = collect();
+
+        // Helper untuk format data
+        // Kita pakai 'diterima_tanggal' untuk Eksternal, dan 'tanggal_surat' untuk Internal (karena langsung sampai)
+        $allSuratMasuk = $allSuratMasuk->merge($suratDisposisi->map(function($item){
+            return ['tgl' => Carbon::parse($item->diterima_tanggal), 'tipe' => 'eksternal'];
+        }));
+
+        $allSuratMasuk = $allSuratMasuk->merge($suratEdaran->map(function($item){
+            return ['tgl' => Carbon::parse($item->diterima_tanggal), 'tipe' => 'eksternal']; // Edaran dianggap eksternal/pusat
+        }));
+
+        $allSuratMasuk = $allSuratMasuk->merge($suratMasukInternal->map(function($item){
+            return ['tgl' => Carbon::parse($item->tanggal_surat), 'tipe' => 'internal'];
+        }));
 
 
         // ==========================================
-        // 1. DATA UNTUK KARTU (CARD) STATISTIK
+        // 3. LOGIKA KARTU STATISTIK (KPI)
         // ==========================================
         
         $totalSuratDiterima = $allSuratMasuk->count();
         
-        // Surat Bulan Ini
-        $suratBulanIni = $allSuratMasuk->filter(function ($surat) {
-            return Carbon::parse($surat->tanggal_surat)->isCurrentMonth() && 
-                   Carbon::parse($surat->tanggal_surat)->isCurrentYear();
+        $suratBulanIni = $allSuratMasuk->filter(function ($item) {
+            return $item['tgl']->isCurrentMonth() && $item['tgl']->isCurrentYear();
         })->count();
 
-        // Total Surat Eksternal
-        $totalEksternal = $allSuratMasuk->where('tipe_surat', 'eksternal')->count();
-
 
         // ==========================================
-        // 2. DATA UNTUK PIE CHART (KOMPOSISI SURAT)
+        // 4. LOGIKA PIE CHART (SUMBER SURAT)
         // ==========================================
         
-        // Kita bandingkan Eksternal vs Internal
-        $totalInternal = $allSuratMasuk->where('tipe_surat', 'internal')->count();
+        // Filter menggunakan Collection
+        $countEksternal = $allSuratMasuk->where('tipe', 'eksternal')->count();
+        $countInternal  = $allSuratMasuk->where('tipe', 'internal')->count();
         
-        // Variabel ini wajib ada agar tidak error "$pieLabels undefined"
-        $pieLabels = ['Eksternal', 'Internal'];
-        $pieData   = [$totalEksternal, $totalInternal];
+        $pieLabels = ['Eksternal (Pusat)', 'Internal (Satker)'];
+        $pieData   = [$countEksternal, $countInternal];
 
 
         // ==========================================
-        // 3. DATA UNTUK LINE CHART (TREN SURAT)
+        // 5. LOGIKA LINE CHART (7 HARI TERAKHIR)
         // ==========================================
         
-        // Mengelompokkan data berdasarkan Bulan
-        $chartData = $allSuratMasuk->groupBy(function($date) {
-            return Carbon::parse($date->tanggal_surat)->format('m'); 
-        });
-
-        // Variabel ini wajib bernama $lineLabels dan $lineData sesuai view Anda
         $lineLabels = [];
         $lineData   = [];
 
-        // Loop 12 Bulan (Jan - Des)
-        for ($i = 1; $i <= 12; $i++) {
-            $bulan = str_pad($i, 2, '0', STR_PAD_LEFT);
-            $namaBulan = Carbon::createFromFormat('m', $bulan)->isoFormat('MMMM');
+        // Loop 7 hari ke belakang (termasuk hari ini)
+        for ($i = 6; $i >= 0; $i--) {
+            $date = Carbon::now()->subDays($i);
+            $formattedDate = $date->format('Y-m-d'); // Format pembanding
             
-            $lineLabels[] = $namaBulan;
-            $lineData[]   = isset($chartData[$bulan]) ? $chartData[$bulan]->count() : 0;
+            // Label Chart: "17 Des"
+            $lineLabels[] = $date->isoFormat('D MMM'); 
+
+            // Hitung surat pada tanggal tersebut
+            $count = $allSuratMasuk->filter(function ($item) use ($formattedDate) {
+                return $item['tgl']->format('Y-m-d') === $formattedDate;
+            })->count();
+
+            $lineData[] = $count;
         }
 
         return view('satker.dashboard', compact(
             'totalSuratDiterima',
             'suratBulanIni',
-            'totalEksternal',
-            'pieLabels',   // <-- Data Pie Chart
-            'pieData',     // <-- Data Pie Chart
-            'lineLabels',  // <-- Data Line Chart (sebelumnya $bulanChart)
-            'lineData'     // <-- Data Line Chart (sebelumnya $jumlahChart)
+            'totalSuratKeluar',
+            'pieLabels',   
+            'pieData',     
+            'lineLabels',  
+            'lineData'     
         ));
     }
 }

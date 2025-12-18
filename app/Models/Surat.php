@@ -21,6 +21,7 @@ class Surat extends Model
         'file_surat',
         'status',
         'user_id',
+        'tujuan_tipe',  
         'tujuan_satker_id',
         'tujuan_user_id', // <-- TAMBAHAN BARU
     ];
@@ -66,5 +67,15 @@ class Surat extends Model
         return $this->belongsToMany(Satker::class, 'surat_edaran_satker')
                     ->withPivot('status')
                     ->withTimestamps();
+    }
+    public function delegasiPegawai()
+    {
+        return $this->belongsToMany(User::class, 'surat_delegasi', 'surat_id', 'user_id')
+                    ->withPivot('status', 'catatan')
+                    ->withTimestamps();
+    }
+    public function user()
+    {
+        return $this->belongsTo(User::class, 'user_id');
     }
 }

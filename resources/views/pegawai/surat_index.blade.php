@@ -3,10 +3,8 @@
 @push('styles')
 <link href="https://cdn.datatables.net/v/bs5/dt-2.1.0/datatables.min.css" rel="stylesheet">
 <style>
-    /* CSS 13px agar konsisten */
     #tabelSuratMasuk, .dataTables_wrapper, .modal-body { font-size: 13px !important; }
     .dataTables_wrapper .dataTables_paginate .page-link { font-size: 0.85rem !important; padding: 0.3rem 0.6rem !important; }
-    
     .info-modal-label { width: 150px; font-weight: 600; }
     .info-modal-data { word-break: break-word; }
 </style>
@@ -37,36 +35,31 @@
                             <th scope="col">Asal Surat</th>
                             <th scope="col">Perihal</th>
                             <th scope="col">Tgl. Diterima</th>
-                            <th scope="col">Status</th>
+                            <th scope="col">Status Saya</th>
                             <th scope="col" class="text-center">Aksi</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {{-- PERBAIKAN: Menggunakan $suratUntukSaya sesuai Controller Anda --}}
                         @foreach ($suratUntukSaya as $index => $surat)
                         @php
-                            // 1. Ambil Info Disposisi Rektor (Jika ada)
+                            // Ambil Data Pivot Khusus User Ini
+                            // Menggunakan first() karena relasi sudah difilter di controller
+                            $pivotData = $surat->delegasiPegawai->first()->pivot ?? null;
+                            $statusSaya = $pivotData ? $pivotData->status : 'belum_dibaca';
+                            
                             $disposisi = $surat->disposisis->last();
                             $catatanRektor = $disposisi->catatan_rektor ?? '-';
                             $tujuanDisposisi = $disposisi->tujuanSatker->nama_satker ?? '-';
 
-                            // 2. LOGIKA UTAMA: Ambil Catatan Delegasi dari Satker (Pimpinan Anda)
-                            // Cari riwayat terakhir dimana statusnya adalah delegasi
-                            $riwayatDelegasi = $surat->riwayats->filter(function($r) {
-                                return str_contains($r->status_aksi, 'Didelegasikan') || str_contains($r->status_aksi, 'Diteruskan ke Pegawai');
-                            })->sortByDesc('created_at')->first();
+                            // Ambil catatan dari pivot (instruksi spesifik untuk pegawai ini)
+                            $catatanSatker = $pivotData ? $pivotData->catatan : '-';
                             
-                            $catatanSatker = '-';
-                            if ($riwayatDelegasi) {
-                                // Parsing teks catatan: "Didelegasikan oleh... Catatan: ISI PESAN"
-                                // Jika ada kata 'Catatan:', ambil teks setelahnya.
-                                if (str_contains($riwayatDelegasi->catatan, 'Catatan:')) {
-                                     $parts = explode('Catatan:', $riwayatDelegasi->catatan);
-                                     $catatanSatker = trim(end($parts), ' "');
-                                } else {
-                                     // Jika tidak ada format khusus, ambil seluruh catatan riwayat
-                                     $catatanSatker = $riwayatDelegasi->catatan;
-                                }
+                            // Fallback jika pivot kosong (data legacy), ambil dari riwayat
+                            if ($catatanSatker == '-') {
+                                $riwayatDelegasi = $surat->riwayats->filter(function($r) {
+                                    return str_contains($r->status_aksi, 'Didelegasikan');
+                                })->sortByDesc('created_at')->first();
+                                if ($riwayatDelegasi) $catatanSatker = $riwayatDelegasi->catatan;
                             }
                         @endphp
                         <tr>
@@ -75,7 +68,7 @@
                             <td>{{ $surat->perihal }}</td>
                             <td>{{ $surat->diterima_tanggal->isoFormat('D MMM YYYY') }}</td>
                             <td>
-                                @if($surat->status == 'selesai')
+                                @if($statusSaya == 'selesai')
                                     <span class="badge bg-success">Selesai</span>
                                 @else
                                     <span class="badge bg-warning text-dark">Belum Diproses</span>
@@ -83,7 +76,6 @@
                             </td>
                             <td class="text-center">
                                 <div class="d-flex justify-content-center gap-1">
-                                    {{-- TOMBOL LIHAT (Dengan Data Lengkap) --}}
                                     <button type="button" class="btn btn-sm btn-info" 
                                         title="Lihat Detail"
                                         data-bs-toggle="modal" 
@@ -98,13 +90,12 @@
                                         data-tipe="{{ $surat->tipe_surat }}"
                                         data-tujuan-disposisi="{{ $tujuanDisposisi }}"
                                         data-catatan-rektor="{{ $catatanRektor }}"
-                                        data-catatan-satker="{{ $catatanSatker }}" {{-- PENTING: Data Catatan Satker --}}
+                                        data-catatan-satker="{{ $catatanSatker }}"
                                         data-file-url="{{ Storage::url($surat->file_surat) }}">
                                         <i class="bi bi-eye-fill"></i>
                                     </button>
 
-                                    {{-- Tombol Tandai Selesai (Jika belum) --}}
-                                    @if($surat->status != 'selesai')
+                                    @if($statusSaya != 'selesai')
                                     <form action="{{ route('pegawai.surat.selesai', $surat->id) }}" method="POST" onsubmit="return confirm('Tandai surat ini sebagai selesai dikerjakan?');">
                                         @csrf
                                         <button type="submit" class="btn btn-sm btn-success" title="Tandai Selesai">
@@ -113,7 +104,6 @@
                                     </form>
                                     @endif
 
-                                    {{-- TOMBOL CETAK (BARU) --}}
                                     <a href="{{ route('cetak.disposisi', $surat->id) }}" target="_blank" class="btn btn-sm btn-outline-danger" title="Cetak Lembar Disposisi">
                                         <i class="bi bi-printer-fill"></i>
                                     </a>
@@ -175,7 +165,6 @@
                                <td class="info-modal-data">: <span id="modal-catatan-rektor" class="fst-italic text-muted"></span></td>
                            </tr>
                            
-                           {{-- BARIS PENTING: PESAN DARI SATKER --}}
                            <tr>
                                <td class="info-modal-label text-primary">Pesan/Instruksi<br>Satker (Delegasi)</td>
                                <td class="info-modal-data">: <span id="modal-catatan-satker" class="fw-bold text-primary"></span></td>
@@ -202,10 +191,9 @@
 <script src="https://cdn.datatables.net/v/bs5/dt-2.1.0/datatables.min.js"></script>
 <script>
     $(document).ready(function () {
-        // Init DataTable
         new DataTable('#tabelSuratMasuk', {
             pagingType: 'simple_numbers',
-            order: [[ 3, 'desc' ]], 
+            order: [[ 3, 'desc' ]],
             language: {
                 search: "Cari:",
                 lengthMenu: "_MENU_",
@@ -214,44 +202,25 @@
             }
         });
 
-        // ----------------------------------------------------
-        // SCRIPT MODAL DETAIL (DENGAN CATATAN SATKER)
-        // ----------------------------------------------------
         var detailModal = document.getElementById('detailSuratModal');
         detailModal.addEventListener('show.bs.modal', function (event) {
             var button = event.relatedTarget;
             
-            // Ambil data dari tombol
-            var perihal = button.getAttribute('data-perihal');
-            var noAgenda = button.getAttribute('data-no-agenda');
-            var nomorSurat = button.getAttribute('data-nomor-surat');
-            var asalSurat = button.getAttribute('data-asal-surat');
-            var tanggalSurat = button.getAttribute('data-tanggal-surat');
-            var tanggalDiterima = button.getAttribute('data-tanggal-diterima');
-            var sifat = button.getAttribute('data-sifat');
-            var tipe = button.getAttribute('data-tipe');
-            var tujuanDisposisi = button.getAttribute('data-tujuan-disposisi');
-            var catatanRektor = button.getAttribute('data-catatan-rektor');
-            var catatanSatker = button.getAttribute('data-catatan-satker'); // AMBIL DATA
-            var fileUrl = button.getAttribute('data-file-url');
-
-            // Isi ke elemen modal
-            detailModal.querySelector('#modal-perihal').textContent = perihal;
-            detailModal.querySelector('#modal-no-agenda').textContent = noAgenda;
-            detailModal.querySelector('#modal-nomor-surat').textContent = nomorSurat;
-            detailModal.querySelector('#modal-asal-surat').textContent = asalSurat;
-            detailModal.querySelector('#modal-tanggal-surat').textContent = tanggalSurat;
-            detailModal.querySelector('#modal-tanggal-diterima').textContent = tanggalDiterima;
-            detailModal.querySelector('#modal-sifat').textContent = sifat;
-            detailModal.querySelector('#modal-tipe').textContent = tipe;
-            detailModal.querySelector('#modal-tujuan-disposisi').textContent = tujuanDisposisi;
-            detailModal.querySelector('#modal-catatan-rektor').textContent = catatanRektor;
+            detailModal.querySelector('#modal-perihal').textContent = button.getAttribute('data-perihal');
+            detailModal.querySelector('#modal-no-agenda').textContent = button.getAttribute('data-no-agenda');
+            detailModal.querySelector('#modal-nomor-surat').textContent = button.getAttribute('data-nomor-surat');
+            detailModal.querySelector('#modal-asal-surat').textContent = button.getAttribute('data-asal-surat');
+            detailModal.querySelector('#modal-tanggal-surat').textContent = button.getAttribute('data-tanggal-surat');
+            detailModal.querySelector('#modal-tanggal-diterima').textContent = button.getAttribute('data-tanggal-diterima');
+            detailModal.querySelector('#modal-sifat').textContent = button.getAttribute('data-sifat');
+            detailModal.querySelector('#modal-tipe').textContent = button.getAttribute('data-tipe');
+            detailModal.querySelector('#modal-tujuan-disposisi').textContent = button.getAttribute('data-tujuan-disposisi');
+            detailModal.querySelector('#modal-catatan-rektor').textContent = button.getAttribute('data-catatan-rektor');
             
-            // ISI CATATAN SATKER
             var elCatatanSatker = detailModal.querySelector('#modal-catatan-satker');
+            var catatanSatker = button.getAttribute('data-catatan-satker');
             elCatatanSatker.textContent = catatanSatker;
             
-            // Styling jika ada isi
             if (catatanSatker !== '-') {
                 elCatatanSatker.classList.add('text-primary');
                 elCatatanSatker.classList.remove('text-muted');
@@ -260,16 +229,22 @@
                 elCatatanSatker.classList.add('text-muted');
             }
 
-            // File Preview
             var btnDownload = detailModal.querySelector('#modal-download-button');
+            var fileUrl = button.getAttribute('data-file-url');
             btnDownload.href = fileUrl;
             
             var wrapper = detailModal.querySelector('#modal-file-preview-wrapper');
-            var ext = fileUrl.split('.').pop().toLowerCase();
-            if(ext === 'pdf'){
-                wrapper.innerHTML = '<iframe src="'+fileUrl+'" width="100%" height="100%" frameborder="0"></iframe>';
+            if(fileUrl && fileUrl.length > 5) {
+                var ext = fileUrl.split('.').pop().toLowerCase().split('?')[0]; 
+                if(ext === 'pdf'){
+                    wrapper.innerHTML = '<iframe src="'+fileUrl+'" width="100%" height="100%" frameborder="0"></iframe>';
+                } else if(['jpg', 'jpeg', 'png', 'gif'].includes(ext)) {
+                    wrapper.innerHTML = '<img src="'+fileUrl+'" class="img-fluid" style="max-height: 100%; width: 100%; object-fit: contain;">';
+                } else {
+                    wrapper.innerHTML = '<div class="text-center p-5"><i class="bi bi-file-earmark-text h1 text-muted"></i><p class="mt-3">Preview tidak didukung.</p></div>';
+                }
             } else {
-                wrapper.innerHTML = '<img src="'+fileUrl+'" class="img-fluid" style="max-height: 100%; width: 100%; object-fit: contain;">';
+                 wrapper.innerHTML = '<div class="text-center p-5"><i class="bi bi-exclamation-circle h1 text-warning"></i><p class="mt-3">File tidak ditemukan.</p></div>';
             }
         });
     });

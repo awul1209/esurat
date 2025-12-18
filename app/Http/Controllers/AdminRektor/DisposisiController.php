@@ -10,12 +10,12 @@ use App\Models\Satker;
 use App\Models\Klasifikasi;
 use App\Models\Disposisi;
 use App\Models\RiwayatSurat;
+use App\Models\User; // Tambahkan ini
+use Carbon\Carbon;
+use App\Services\WaService; // Tambahkan ini
 
 class DisposisiController extends Controller
 {
-    /**
-     * Menampilkan halaman detail surat dan form disposisi.
-     */
     public function show(Surat $surat)
     {
         if ($surat->status != 'di_admin_rektor') {
@@ -32,98 +32,151 @@ class DisposisiController extends Controller
         ));
     }
 
-    /**
-     * Menyimpan keputusan Rektor.
-     */
     public function store(Request $request, Surat $surat)
     {
-        // 1. Validasi (tujuan_satker_id BOLEH KOSONG jika hanya untuk arsip Rektor)
-        $validated = $request->validate([
-            'tujuan_satker_id' => 'nullable|exists:satkers,id', 
-            'klasifikasi_id' => 'nullable|exists:klasifikasis,id',
-            'catatan_rektor' => 'nullable|string',
-            'disposisi_lain' => 'nullable|string',
+        // 1. Validasi Input (HANYA KLASIFIKASI & TUJUAN)
+        $request->validate([
+            'tujuan_satker_ids' => 'nullable|array', 
+            'disposisi_lain'    => 'nullable|string', 
+            'catatan_rektor'    => 'nullable|string',
+            'klasifikasi_id'    => 'nullable|exists:klasifikasis,id',
         ]);
 
         $user = Auth::user();
+        $catatanRektor = $request->catatan_rektor;
+        $disposisiLain = $request->disposisi_lain;
+        $klasifikasiId = $request->klasifikasi_id;
+
+        // Bersihkan input array dari value "lainnya"
+        $inputSatkerIds = $request->input('tujuan_satker_ids', []);
+        $cleanSatkerIds = array_filter($inputSatkerIds, function($value) {
+            return $value !== 'lainnya';
+        });
 
         // ========================================================================
-        // KASUS A: ADA TUJUAN DISPOSISI (KEMBALI KE BAU)
+        // KASUS A: ADA TUJUAN DISPOSISI (Satker Dropdown ATAU Manual Lainnya)
         // ========================================================================
-        if ($request->filled('tujuan_satker_id')) {
+        if (!empty($cleanSatkerIds) || !empty($disposisiLain)) {
             
-            // 1. Simpan Data Disposisi
-            Disposisi::create([
-                'surat_id' => $surat->id,
-                'user_id' => $user->id,
-                'tujuan_satker_id' => $validated['tujuan_satker_id'],
-                'klasifikasi_id' => $validated['klasifikasi_id'],
-                'catatan_rektor' => $validated['catatan_rektor'],
-                'disposisi_lain' => $validated['disposisi_lain'],
-                'tanggal_disposisi' => now(),
-            ]);
+            $tujuanNames = [];
 
-            // 2. Update Status -> 'didisposisi' (Agar muncul di dashboard BAU untuk diteruskan)
+            // 1. Simpan Tujuan Satker (Looping ID Satker)
+            foreach ($cleanSatkerIds as $satkerId) {
+                Disposisi::create([
+                    'surat_id'         => $surat->id,
+                    'tujuan_satker_id' => $satkerId,
+                    'user_id'          => $user->id,
+                    'klasifikasi_id'   => $klasifikasiId,
+                    'catatan_rektor'   => $catatanRektor,
+                    'tanggal_disposisi'=> now(),
+                ]);
+                
+                $s = Satker::find($satkerId);
+                if ($s) $tujuanNames[] = $s->nama_satker;
+            }
+
+            // 2. Simpan Tujuan Lain (Manual Input)
+            if (!empty($disposisiLain)) {
+                Disposisi::create([
+                    'surat_id'         => $surat->id,
+                    'disposisi_lain'   => $disposisiLain,
+                    'user_id'          => $user->id,
+                    'klasifikasi_id'   => $klasifikasiId,
+                    'catatan_rektor'   => $catatanRektor,
+                    'tujuan_satker_id' => null,
+                    'tanggal_disposisi'=> now(),
+                ]);
+                $tujuanNames[] = $disposisiLain . ' (Eksternal)';
+            }
+
+            // 3. Update Status Surat -> 'didisposisi'
             $surat->update(['status' => 'didisposisi']);
 
-            // 3. Catat Riwayat
-            $tujuan = Satker::find($validated['tujuan_satker_id']);
-            $catatan_disposisi_lain = $validated['disposisi_lain'] ? ' | Lainnya: ' . $validated['disposisi_lain'] : '';
-
+            // 4. Catat Riwayat
+            $tujuanStr = implode(', ', $tujuanNames);
+            
             RiwayatSurat::create([
-                'surat_id' => $surat->id,
-                'user_id' => $user->id,
-                'status_aksi' => 'Disposisi Rektor (Proses)',
-                'catatan' => 'Disposisi Rektor ke ' . $tujuan->nama_satker . '. Kembali ke BAU untuk diteruskan. Catatan: "' . ($validated['catatan_rektor'] ?? '-') . '"' . $catatan_disposisi_lain
+                'surat_id'    => $surat->id,
+                'user_id'     => $user->id,
+                'status_aksi' => 'Disposisi Rektor',
+                'catatan'     => 'Rektor mendisposisikan surat ke: ' . $tujuanStr . '. (Menunggu BAU meneruskan).'
             ]);
 
-            return redirect()->route('home')->with('success', 'Disposisi disimpan. Surat dikembalikan ke BAU untuk diteruskan ke Satker.');
+            // ===============================================================
+            // NOTIFIKASI WA KE ADMIN BAU (FITUR BARU)
+            // ===============================================================
+            try {
+                $adminBau = User::where('role', 'bau')->first();
+                
+                if ($adminBau && $adminBau->no_hp) {
+                    
+                    $tglSurat = $surat->tanggal_surat->format('d-m-Y');
+                    $link = route('login'); 
+
+                    $pesan = 
+"📩 *Notifikasi Surat Telah Didisposisi*
+
+Yth. Admin BAU,
+Rektor telah melakukan disposisi pada surat berikut:
+
+Asal Surat    : {$surat->surat_dari}
+No. Agenda    : {$surat->no_agenda}
+Perihal       : {$surat->perihal}
+Tujuan Disposisi : {$tujuanStr}
+
+Mohon segera LOGIN dan TERUSKAN surat fisik/digital ke Satker terkait.
+Link: {$link}
+
+Pesan otomatis Sistem e-Surat.";
+
+                    WaService::send($adminBau->no_hp, $pesan);
+                }
+            } catch (\Exception $e) {}
+            // ===============================================================
+
+            return redirect()->route('adminrektor.suratmasuk.index')->with('success', 'Disposisi berhasil disimpan & dikembalikan ke BAU.');
         }
 
         // ========================================================================
         // KASUS B: TIDAK ADA TUJUAN (LANGSUNG SELESAI/ARSIP)
         // ========================================================================
         else {
-            // 1. Update Status -> 'selesai' (Arsip, tidak ke BAU)
             $surat->update(['status' => 'selesai']);
 
-            // 2. Catat Riwayat
             RiwayatSurat::create([
-                'surat_id' => $surat->id,
-                'user_id' => $user->id,
+                'surat_id'    => $surat->id,
+                'user_id'     => $user->id,
                 'status_aksi' => 'Selesai (Arsip Rektor)',
-                'catatan' => 'Surat disetujui/dibaca oleh Rektor. Langsung diarsipkan (Tanpa Disposisi).'
+                'catatan'     => 'Surat disetujui/dibaca oleh Rektor. Langsung diarsipkan (Tanpa Disposisi).'
             ]);
 
-            return redirect()->route('home')->with('success', 'Surat telah ditandai Selesai dan masuk Arsip (Tidak diteruskan ke manapun).');
+            return redirect()->route('adminrektor.suratmasuk.index')->with('success', 'Surat telah ditandai Selesai dan masuk Arsip (Tidak diteruskan ke manapun).');
         }
     }
 
-    /**
-     * FUNGSI RIWAYAT
-     */
     public function riwayat()
     {
-        // PERBAIKAN: Menambahkan status arsip_satker, diarsipkan, disimpan agar surat tidak hilang
         $suratSelesai = Surat::with('disposisis.tujuanSatker')
                             ->whereIn('status', [
                                 'didisposisi', 
+                                'di_satker', 
                                 'selesai', 
-                                'selesai_edaran',
-                                'arsip_satker', // <-- PENTING: Status saat diarsip Satker
-                                'diarsipkan',
+                                'selesai_edaran', 
+                                'arsip_satker', 
+                                'diarsipkan', 
                                 'disimpan'
                             ])
+                            // --- FILTER PERBAIKAN ---
+                            // Hanya tampilkan surat yang Tipe Tujuannya 'rektor' atau 'universitas'
+                            // Surat inputan manual satker (tipe: 'satker') otomatis TIDAK AKAN MUNCUL
+                            ->whereIn('tujuan_tipe', ['rektor', 'universitas'])
+                            // ------------------------
                             ->latest('diterima_tanggal')
                             ->get();
         
         return view('admin_rektor.riwayat_disposisi_index', compact('suratSelesai'));
     }
 
-    /**
-     * FUNGSI DETAIL RIWAYAT UNTUK MODAL TIMELINE
-     * Pastikan Anda menambahkan route untuk ini di web.php
-     */
     public function showRiwayatDetail(Surat $surat)
     {
         $surat->load(['riwayats' => function($query) {

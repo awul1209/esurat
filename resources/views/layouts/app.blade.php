@@ -35,88 +35,200 @@
         {{-- ==================================================== --}}
         @if(Auth::user()->role == 'bau')
             
-            <a href="{{ route('bau.surat.index') }}" class="list-group-item list-group-item-action {{ (Request::routeIs('bau.surat.index') || Request::routeIs('bau.surat.create') || Request::routeIs('bau.surat.edit')) ? 'active' : '' }}">
-                <i class="bi bi-inbox-fill me-2"></i> Surat Masuk
+         {{-- 1. SURAT MASUK (DROPDOWN) --}}
+            @php
+                // Cek apakah sedang di halaman surat masuk (Tapi BUKAN di Inbox BAU)
+                $smActive = Request::routeIs('bau.surat.*') && !Request::routeIs('bau.surat.untukBau');
+            @endphp
+            <a href="#menuSuratMasukBau" data-bs-toggle="collapse" 
+               class="list-group-item list-group-item-action d-flex justify-content-between align-items-center {{ $smActive ? 'active' : '' }}">
+                <span><i class="bi bi-inbox-fill me-2"></i> Surat Masuk</span>
+                <i class="bi bi-chevron-down small"></i>
             </a>
-            {{-- (Sisa menu BAU Anda...) --}}
-            <a href="{{ route('bau.disposisi.index') }}" class="list-group-item list-group-item-action {{ Request::routeIs('bau.disposisi.index') ? 'active' : '' }}">
+            <div class="collapse {{ $smActive ? 'show' : '' }}" id="menuSuratMasukBau">
+                <div class="list-group list-group-flush submenu bg-light">
+                    {{-- Sub: Eksternal --}}
+                    <a href="{{ route('bau.surat.eksternal') }}" 
+                       class="list-group-item list-group-item-action ps-5 border-0 {{ Request::routeIs('bau.surat.eksternal') ? 'fw-bold text-primary' : '' }}">
+                        <i class="bi bi-box-arrow-in-down me-2"></i> Eksternal
+                    </a>
+                    {{-- Sub: Internal --}}
+                    <a href="{{ route('bau.surat.internal') }}" 
+                       class="list-group-item list-group-item-action ps-5 border-0 {{ Request::routeIs('bau.surat.internal') ? 'fw-bold text-primary' : '' }}">
+                        <i class="bi bi-arrow-left-right me-2"></i> Internal
+                    </a>
+                </div>
+            </div>
+
+   
+
+            {{-- 3. DISPOSISI (TETAP) --}}
+            <a href="{{ route('bau.disposisi.index') }}" 
+               class="list-group-item list-group-item-action {{ Request::routeIs('bau.disposisi.index') ? 'active' : '' }}">
                 <i class="bi bi-pencil-square me-2"></i> Disposisi (dari Rektor)
             </a>
-            <a href="{{ route('bau.riwayat.index') }}" class="list-group-item list-group-item-action {{ Request::routeIs('bau.riwayat.index') ? 'active' : '' }}">
+
+            {{-- 4. RIWAYAT TERUSAN (TETAP) --}}
+            <a href="{{ route('bau.riwayat.index') }}" 
+               class="list-group-item list-group-item-action {{ Request::routeIs('bau.riwayat.index') ? 'active' : '' }}">
                 <i class="bi bi-send-check-fill me-2"></i> Riwayat Terusan
             </a>
-            <a href="{{ route('bau.surat-keluar.index') }}" class="list-group-item list-group-item-action {{ Request::routeIs('bau.surat-keluar.*') ? 'active' : '' }}">
-                <i class="bi bi-send-fill me-2"></i> Surat Keluar
+
+            {{-- 5. SURAT KELUAR (DROPDOWN) --}}
+            @php
+                $skActive = Request::routeIs('bau.surat-keluar.*');
+            @endphp
+            <a href="#menuSuratKeluarBau" data-bs-toggle="collapse" 
+               class="list-group-item list-group-item-action d-flex justify-content-between align-items-center {{ $skActive ? 'active' : '' }}">
+                <span><i class="bi bi-send-fill me-2"></i> Surat Keluar</span>
+                <i class="bi bi-chevron-down small"></i>
             </a>
-            <a href="#menuMasterData" data-bs-toggle="collapse" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+            <div class="collapse {{ $skActive ? 'show' : '' }}" id="menuSuratKeluarBau">
+                <div class="list-group list-group-flush submenu bg-light">
+                    {{-- Sub: Eksternal --}}
+                    <a href="{{ route('bau.surat-keluar.eksternal') }}" 
+                       class="list-group-item list-group-item-action ps-5 border-0 {{ Request::routeIs('bau.surat-keluar.eksternal') ? 'fw-bold text-primary' : '' }}">
+                        <i class="bi bi-globe me-2"></i> Eksternal
+                    </a>
+                    {{-- Sub: Internal --}}
+                    <a href="{{ route('bau.surat-keluar.internal') }}" 
+                       class="list-group-item list-group-item-action ps-5 border-0 {{ Request::routeIs('bau.surat-keluar.internal') ? 'fw-bold text-primary' : '' }}">
+                        <i class="bi bi-arrows-expand me-2"></i> Internal
+                    </a>
+                </div>
+            </div>
+
+                     {{-- 2. INBOX BAU (LANGSUNG) --}}
+<a href="{{ route('bau.inbox') }}" 
+   class="list-group-item list-group-item-action {{ Request::routeIs('bau.inbox*') ? 'active' : '' }}">
+    <i class="bi bi-folder-symlink-fill me-2"></i> Inbox BAU
+</a>
+
+            {{-- 6. MASTER DATA (TETAP) --}}
+            <a href="#menuMasterData" data-bs-toggle="collapse" 
+               class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
                 <span><i class="bi bi-gear-fill me-2"></i> Master Data</span>
                 <i class="bi bi-chevron-down small"></i>
             </a>
             <div class="collapse {{ Request::routeIs('bau.manajemen-user.*') ? 'show' : '' }}" id="menuMasterData">
-                <div class="list-group list-group-flush submenu">
-                    <a href="{{ route('bau.manajemen-user.index') }}" class="list-group-item list-group-item-action ps-5 {{ Request::routeIs('bau.manajemen-user.*') ? 'active' : '' }}">
+                <div class="list-group list-group-flush submenu bg-light">
+                    <a href="{{ route('bau.manajemen-user.index') }}" 
+                       class="list-group-item list-group-item-action ps-5 border-0 {{ Request::routeIs('bau.manajemen-user.*') ? 'fw-bold text-primary' : '' }}">
                         <i class="bi bi-person-vcard-fill me-2"></i> Manajemen User
                     </a>
                 </div>
             </div>
+            
 
         {{-- ==================================================== --}}
         {{-- MENU KHUSUS ADMIN REKTOR (TIDAK BERUBAH) --}}
         {{-- ==================================================== --}}
         @elseif(Auth::user()->role == 'admin_rektor')
             
-            <a href="{{ route('adminrektor.suratmasuk.index') }}" 
-               class="list-group-item list-group-item-action 
-               {{ (Request::routeIs('adminrektor.suratmasuk.*') || Request::routeIs('adminrektor.disposisi.show')) ? 'active' : '' }}">
-                <i class="bi bi-inbox-fill me-2"></i> Surat Masuk
+        <a href="#menuSuratMasukRektor" data-bs-toggle="collapse" 
+               class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-inbox-fill me-2"></i> Surat Masuk</span>
+                <i class="bi bi-chevron-down small"></i>
             </a>
+            {{-- Logic: Tetap terbuka jika sedang di route suratmasuk apapun atau disposisi --}}
+            <div class="collapse {{ (Request::routeIs('adminrektor.suratmasuk.*') || Request::routeIs('adminrektor.disposisi.show')) ? 'show' : '' }}" 
+                 id="menuSuratMasukRektor">
+                <div class="list-group list-group-flush submenu">
+                    
+                    {{-- A. Eksternal (Dari BAU) --}}
+                    {{-- Asumsi: index default adalah eksternal --}}
+                    <a href="{{ route('adminrektor.suratmasuk.index') }}" 
+                       class="list-group-item list-group-item-action ps-5 {{ Request::routeIs('adminrektor.suratmasuk.index') ? 'active' : '' }}">
+                        <i class="bi bi-box-arrow-in-down me-2"></i> Eksternal
+                    </a>
+
+                    {{-- B. Internal (Dari Satker Lain) --}}
+                    {{-- Pastikan Route ini sudah dibuat --}}
+                    <a href="{{ route('adminrektor.suratmasuk.internal') }}" 
+                       class="list-group-item list-group-item-action ps-5 {{ Request::routeIs('adminrektor.suratmasuk.internal') ? 'active' : '' }}">
+                        <i class="bi bi-arrows-collapse me-2"></i> Internal
+                    </a>
+                </div>
+            </div>
+
+            {{-- 2. RIWAYAT DISPOSISI (SINGLE MENU) --}}
             <a href="{{ route('adminrektor.disposisi.riwayat') }}" 
-               class="list-group-item list-group-item-action 
-               {{ Request::routeIs('adminrektor.disposisi.riwayat') ? 'active' : '' }}">
-                <i class="bi bi-send-check-fill me-2"></i> Riwayat Disposisi
+               class="list-group-item list-group-item-action {{ Request::routeIs('adminrektor.disposisi.riwayat') ? 'active' : '' }}">
+                <i class="bi bi-clock-history me-2"></i> Riwayat Disposisi
             </a>
-            <a href="{{ route('adminrektor.suratkeluar.index') }}" 
-               class="list-group-item list-group-item-action 
-               {{ Request::routeIs('adminrektor.suratkeluar.*') ? 'active' : '' }}">
-                <i class="bi bi-send-fill me-2"></i> Surat Keluar
+
+            {{-- 3. SURAT KELUAR (DROPDOWN) --}}
+            <a href="#menuSuratKeluarRektor" data-bs-toggle="collapse" 
+               class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-send-fill me-2"></i> Surat Keluar</span>
+                <i class="bi bi-chevron-down small"></i>
+            </a>
+            <div class="collapse {{ Request::routeIs('adminrektor.suratkeluar.*') ? 'show' : '' }}" id="menuSuratKeluarRektor">
+                <div class="list-group list-group-flush submenu">
+                    
+                    {{-- A. Eksternal (Ke Luar Kampus) --}}
+                    <a href="{{ route('adminrektor.suratkeluar.index') }}" 
+                       class="list-group-item list-group-item-action ps-5 {{ Request::routeIs('adminrektor.suratkeluar.index') ? 'active' : '' }}">
+                        <i class="bi bi-box-arrow-up me-2"></i> Eksternal
+                    </a>
+
+                    {{-- B. Internal (Ke Satker Lain) --}}
+                    {{-- Pastikan Route ini sudah dibuat --}}
+                    <a href="{{ route('adminrektor.suratkeluar.internal') }}" 
+                       class="list-group-item list-group-item-action ps-5 {{ Request::routeIs('adminrektor.suratkeluar.internal') ? 'active' : '' }}">
+                        <i class="bi bi-arrows-expand me-2"></i> Internal
+                    </a>
+                </div>
+            </div>
+
+            {{-- 4. MANAJEMEN AKUN (BARU) --}}
+            {{-- Menggunakan route profil.edit yang umum digunakan untuk edit profil sendiri --}}
+            <a href="{{ route('profil.edit') }}" 
+               class="list-group-item list-group-item-action {{ Request::routeIs('profil.edit') ? 'active' : '' }}">
+                <i class="bi bi-person-gear me-2"></i> Manajemen Akun
             </a>
 
         {{-- ==================================================== --}}
         {{-- (DIPERBARUI) MENU KHUSUS SATKER --}}
         {{-- ==================================================== --}}
         @elseif(Auth::user()->role == 'satker')
-            
-            {{-- Dropdown Surat Masuk --}}
-            <a href="#menuSuratMasukSatker" data-bs-toggle="collapse" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-                <span><i class="bi bi-inbox-fill me-2"></i> Surat Masuk</span>
-                <i class="bi bi-chevron-down small"></i>
+    
+    {{-- Dropdown Surat Masuk --}}
+    <a href="#menuSuratMasukSatker" data-bs-toggle="collapse" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-inbox-fill me-2"></i> Surat Masuk</span>
+        <i class="bi bi-chevron-down small"></i>
+    </a>
+    <div class="collapse {{ (Request::routeIs('satker.surat-masuk.*') || Request::routeIs('satker.surat-masuk.internal')) ? 'show' : '' }}" id="menuSuratMasukSatker">
+        <div class="list-group list-group-flush submenu">
+            <a href="{{ route('satker.surat-masuk.eksternal') }}" class="list-group-item list-group-item-action ps-5 {{ Request::routeIs('satker.surat-masuk.eksternal') ? 'active' : '' }}">
+                <i class="bi bi-box-arrow-in-down me-2"></i> Eksternal
             </a>
-            <div class="collapse {{ Request::routeIs('satker.surat-masuk.*') ? 'show' : '' }}" id="menuSuratMasukSatker">
-                <div class="list-group list-group-flush submenu">
-                    <a href="{{ route('satker.surat-masuk.eksternal') }}" class="list-group-item list-group-item-action ps-5 {{ Request::routeIs('satker.surat-masuk.eksternal') ? 'active' : '' }}">
-                        <i class="bi bi-box-arrow-in-down me-2"></i> Eksternal
-                    </a>
-                    <a href="#" class="list-group-item list-group-item-action ps-5 disabled">
-                        <i class="bi bi-arrows-collapse me-2"></i> Internal (Segera)
-                    </a>
-                </div>
-            </div>
-            
-            {{-- Dropdown Surat Keluar --}}
-            <a href="#menuSuratKeluarSatker" data-bs-toggle="collapse" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-                <span><i class="bi bi-send-fill me-2"></i> Surat Keluar</span>
-                <i class="bi bi-chevron-down small"></i>
+            {{-- LINK BARU: INTERNAL --}}
+            <a href="{{ route('satker.surat-masuk.internal') }}" class="list-group-item list-group-item-action ps-5 {{ Request::routeIs('satker.surat-masuk.internal') ? 'active' : '' }}">
+                <i class="bi bi-arrows-collapse me-2"></i> Internal
             </a>
-            <div class="collapse {{ Request::routeIs('satker.surat-keluar.*') ? 'show' : '' }}" id="menuSuratKeluarSatker">
-                <div class="list-group list-group-flush submenu">
-                    <a href="#" class="list-group-item list-group-item-action ps-5 disabled">
-                        <i class="bi bi-arrows-expand me-2"></i> Internal (Segera)
-                    </a>
-                    <a href="#" class="list-group-item list-group-item-action ps-5 disabled">
-                        <i class="bi bi-box-arrow-up me-2"></i> Eksternal (Segera)
-                    </a>
-                </div>
-            </div>
+        </div>
+    </div>
+    
+    {{-- Dropdown Surat Keluar --}}
+    <a href="#menuSuratKeluarSatker" data-bs-toggle="collapse" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-send-fill me-2"></i> Surat Keluar</span>
+        <i class="bi bi-chevron-down small"></i>
+    </a>
+    <div class="collapse {{ Request::routeIs('satker.surat-keluar.*') ? 'show' : '' }}" id="menuSuratKeluarSatker">
+        <div class="list-group list-group-flush submenu">
+            {{-- LINK BARU: INTERNAL --}}
+<a href="{{ route('satker.surat-keluar.internal') }}" 
+   class="list-group-item list-group-item-action ps-5 {{ Request::routeIs('satker.surat-keluar.internal*') ? 'active' : '' }}">
+    <i class="bi bi-arrows-expand me-2"></i> Internal
+</a>
+
+<a href="{{ route('satker.surat-keluar.eksternal.index') }}" 
+   class="list-group-item list-group-item-action ps-5 {{ Request::routeIs('satker.surat-keluar.eksternal*') ? 'active' : '' }}">
+    <i class="bi bi-box-arrow-up me-2"></i> Eksternal
+</a>
+        </div>
+    </div>
 
         {{-- ==================================================== --}}
         {{-- (DIPERBARUI) MENU KHUSUS PEGAWAI --}}

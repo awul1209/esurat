@@ -32,6 +32,11 @@
                             <input type="text" class="form-control @error('name') is-invalid @enderror" id="name" name="name" value="{{ old('name', $user->name) }}" required>
                             @error('name') <div class="invalid-feedback">{{ $message }}</div> @enderror
                         </div>
+                                            <div class="mb-3">
+                        <label for="no_hp" class="form-label">No. HP (WhatsApp)</label>
+                        <input type="text" class="form-control" id="no_hp" name="no_hp" 
+                            value="{{ old('no_hp', $user->no_hp) }}">
+                    </div>
 
                         <div class="mb-3">
                             <label for="email" class="form-label">Email: <span class="text-danger">*</span></label>

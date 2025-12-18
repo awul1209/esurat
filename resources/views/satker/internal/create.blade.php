@@ -7,47 +7,40 @@
 
 @section('content')
 <div class="container-fluid px-4">
-    <div class="card shadow-sm border-0 mb-4 mt-4">
+    <div class="card shadow-sm border-0 mb-4">
         <div class="card-header py-3 bg-light border-0">
-            <h6 class="m-0 fw-bold text-primary"><i class="bi bi-send-plus-fill me-2"></i>Buat Surat Keluar Internal (BAU)</h6>
+            <h6 class="m-0 fw-bold text-primary">Kirim Surat Internal / Ke Rektor</h6>
         </div>
         <div class="card-body">
-            <form action="{{ route('bau.surat-keluar.store') }}" method="POST" enctype="multipart/form-data">
+            <form action="{{ route('satker.surat-keluar.internal.store') }}" method="POST" enctype="multipart/form-data">
                 @csrf
-                
-                {{-- Hidden Input untuk menandakan ini surat internal --}}
-                <input type="hidden" name="tipe_kirim" value="internal">
-
                 <div class="mb-3">
                     <label class="form-label">Nomor Surat</label>
-                    <input type="text" name="nomor_surat" class="form-control" placeholder="Contoh: 005/BAU/2025" required>
+                    <input type="text" name="nomor_surat" class="form-control" required>
                 </div>
                 
-                {{-- MULTI SELECT TUJUAN --}}
+                {{-- MULTI SELECT --}}
                 <div class="mb-3">
                     <label class="form-label">Tujuan Surat</label>
                     <select name="tujuan_satker_ids[]" class="form-select select2" multiple="multiple" required>
-                        
-                        {{-- OPSI KE REKTOR --}}
-                        <optgroup label="Pimpinan">
-                            <option value="rektor">Rektor</option>
-                            <option value="universitas">Universitas</option>
+                        {{-- OPSI KHUSUS UNTUK JALUR BAU -> REKTOR --}}
+                        <optgroup label="Pimpinan (Via BAU)">
+                            <option value="universitas">Rektor/Universitas</option>
+                            <!-- <option value="universitas">Universitas</option> -->
                         </optgroup>
 
-                        {{-- OPSI KE SATKER LAIN --}}
+                        {{-- OPSI SATKER LAIN (LANGSUNG) --}}
                         <optgroup label="Satuan Kerja (Langsung)">
                             @foreach($daftarSatker as $satker)
-                                {{-- Jangan tampilkan BAU sendiri jika perlu, atau biarkan --}}
                                 <option value="{{ $satker->id }}">{{ $satker->nama_satker }}</option>
                             @endforeach
                         </optgroup>
                     </select>
                     <div class="form-text text-muted">
                         <small>
-                            <ul class="mb-0 ps-3">
-                                <li>Jika memilih <strong>Rektor/Universitas</strong>: Surat langsung masuk ke menu <strong>Admin Rektor</strong>.</li>
-                                <li>Jika memilih <strong>Satker</strong>: Surat langsung masuk ke <strong>Inbox Internal Satker</strong> tersebut.</li>
-                            </ul>
+                            <i class="bi bi-info-circle"></i> 
+                            Jika memilih <strong>Rektor/Universitas</strong>, surat akan masuk ke <strong>BAU</strong> terlebih dahulu untuk diteruskan.
+                            Jika memilih <strong>Satker</strong>, surat langsung masuk ke akun Satker tujuan.
                         </small>
                     </div>
                 </div>
@@ -56,26 +49,16 @@
                     <label class="form-label">Perihal</label>
                     <input type="text" name="perihal" class="form-control" required>
                 </div>
-
                 <div class="mb-3">
                     <label class="form-label">Tanggal Surat</label>
                     <input type="date" name="tanggal_surat" class="form-control" value="{{ date('Y-m-d') }}" required>
                 </div>
-
                 <div class="mb-3">
                     <label class="form-label">File Surat (PDF/Gambar)</label>
-                    <input type="file" name="file_surat" class="form-control" accept=".pdf,.jpg,.jpeg,.png" required>
-                    <div class="form-text">Maksimal 5MB.</div>
+                    <input type="file" name="file_surat" class="form-control" required>
                 </div>
-
-                <div class="d-flex justify-content-between">
-                    <a href="{{ route('bau.surat-keluar.internal') }}" class="btn btn-secondary">
-                        <i class="bi bi-arrow-left"></i> Batal
-                    </a>
-                    <button type="submit" class="btn btn-primary">
-                        <i class="bi bi-send-fill me-1"></i> Kirim Surat
-                    </button>
-                </div>
+                <button type="submit" class="btn btn-primary"><i class="bi bi-send-fill me-1"></i> Kirim Surat</button>
+                <a href="{{ route('satker.surat-keluar.internal') }}" class="btn btn-secondary">Batal</a>
             </form>
         </div>
     </div>
@@ -89,7 +72,7 @@
     $(document).ready(function() {
         $('.select2').select2({
             theme: 'bootstrap-5',
-            placeholder: 'Pilih Tujuan Surat...',
+            placeholder: 'Pilih Tujuan...',
             allowClear: true
         });
     });

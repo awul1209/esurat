@@ -59,10 +59,39 @@
                         <tr>
                             <td>{{ $surat->nomor_surat }}</td>
                             <td>{{ $surat->perihal }}</td>
-                            <td>{{ $surat->tujuan_surat }}</td>
+                           {{-- ==================================================== --}}
+                            {{-- BAGIAN PERBAIKAN LOGIKA TAMPILAN TUJUAN --}}
+                            {{-- ==================================================== --}}
+                            <td>
+                                <div class="d-flex flex-column align-items-start">
+                                    
+                                    {{-- 1. Cek Jika Ada Tujuan Manual (Rektor/Universitas/Eksternal Manual) --}}
+                                    @if(!empty($surat->tujuan_surat))
+                                        <span class="badge bg-warning text-dark badge-tujuan border border-warning">
+                                            <i class="bi bi-person-fill"></i> {{ $surat->tujuan_surat }}
+                                        </span>
+                                    @endif
+
+                                    {{-- 2. Cek Jika Ada Tujuan Satker (Internal via Pivot) --}}
+                                    {{-- Kita gunakan $surat->penerimaInternal --}}
+                                    @if($surat->penerimaInternal->count() > 0)
+                                        @foreach($surat->penerimaInternal as $penerima)
+                                            <span class="badge bg-success badge-tujuan">
+                                                <i class="bi bi-building"></i> {{ $penerima->nama_satker }}
+                                            </span>
+                                        @endforeach
+                                    @endif
+
+                                    {{-- 3. Jika Kosong --}}
+                                    @if(empty($surat->tujuan_surat) && $surat->penerimaInternal->count() == 0)
+                                        <span class="text-muted small fst-italic">- Tidak ada tujuan spesifik -</span>
+                                    @endif
+                                </div>
+                            </td>
+                            {{-- ==================================================== --}}
                             <td>{{ $surat->tanggal_surat->isoFormat('D MMMM YYYY') }}</td>
                             {{-- PERUBAHAN 2: Isi data Tgl. Diinput --}}
-                            <td>{{ $surat->created_at->isoFormat('D MMM YYYY, H:mm') }}</td>
+                            <td>{{ $surat->created_at->isoFormat('D MMM YYYY') }}</td>
                             <td class="text-center">
                                 <div class="d-flex justify-content-center gap-1">
                                     {{-- PERUBAHAN 3: Tambah data-tanggal-input --}}

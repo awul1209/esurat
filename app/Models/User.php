@@ -18,6 +18,7 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
+        'no_hp',
         'role',      // <-- TAMBAHKAN INI
         'satker_id', // <-- TAMBAHKAN INI
     ];

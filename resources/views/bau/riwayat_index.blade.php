@@ -7,10 +7,8 @@
     #tabelRiwayat, .dataTables_wrapper { font-size: 13px !important; }
     .dataTables_wrapper .dataTables_paginate .page-link { font-size: 0.85rem !important; padding: 0.3rem 0.6rem !important; }
     .dataTables_wrapper .dataTables_paginate { margin-top: 0.5rem !important; }
-    table.dataTable thead > tr > th.sorting::before, table.dataTable thead > tr > th.sorting_asc::before, table.dataTable thead > tr > th.sorting_desc::before, table.dataTable thead > tr > th.sorting::after, table.dataTable thead > tr > th.sorting_asc::after, table.dataTable thead > tr > th.sorting_desc::after { font-size: 0.8em !important; bottom: 0.6em !important; opacity: 0.4 !important; }
-    table.dataTable thead > tr > th.sorting_asc::before, table.dataTable thead > tr > th.sorting_desc::after { opacity: 1 !important; }
     
-    /* CSS BARU: Untuk Timeline Riwayat */
+    /* CSS Timeline */
     .timeline { list-style: none; padding: 0; position: relative; }
     .timeline:before {
         top: 0; bottom: 0; position: absolute; content: " "; width: 3px;
@@ -62,29 +60,92 @@
                     </thead>
                     <tbody>
                         @foreach ($suratSelesai as $surat) 
+                        
+                        @php
+                            // LOGIKA PENENTUAN TUJUAN AKHIR UNTUK RIWAYAT
+                            $tipe = $surat->tujuan_tipe;
+                            $tujuanAkhirHTML = '-'; // Versi HTML untuk Tabel
+                            $tujuanModalText = '-'; // Versi Teks untuk Modal
+
+                            // 1. Fallback Detection (jika tipe kosong di DB lama)
+                            if (empty($tipe)) {
+                                if ($surat->tujuan_satker_id) { $tipe = 'satker'; } 
+                                elseif ($surat->tujuan_user_id) { $tipe = 'pegawai'; } 
+                                else { $tipe = 'universitas'; }
+                            }
+
+                            // 2. Generate String Tujuan berdasarkan Tipe
+                            if ($tipe == 'rektor') {
+                                $tujuanAkhirHTML = '<span class="fw-bold text-primary">Rektor</span>';
+                                $tujuanModalText = 'Rektor';
+                            } 
+                            elseif ($tipe == 'universitas') {
+                                // PERBAIKAN PENTING DI SINI:
+                                // Mengambil SEMUA disposisi, baik Satker maupun Lainnya
+                                $listDisposisi = $surat->disposisis;
+                                $namaTujuansHTML = []; // Array untuk tampilan HTML
+                                $namaTujuansText = []; // Array untuk tampilan Teks Modal
+
+                                foreach($listDisposisi as $d) {
+                                    // A. Cek Satker Internal
+                                    if ($d->tujuanSatker) {
+                                        $namaTujuansHTML[] = '<span class="text-primary fw-bold">' . $d->tujuanSatker->nama_satker . '</span>';
+                                        $namaTujuansText[] = $d->tujuanSatker->nama_satker;
+                                    }
+                                    // B. Cek Disposisi Lain (BEM/Ormawa)
+                                    elseif ($d->disposisi_lain) {
+                                        $namaTujuansHTML[] = '<span class="text-dark fst-italic">' . $d->disposisi_lain . ' (Non-Satker)</span>';
+                                        $namaTujuansText[] = $d->disposisi_lain . ' (Non-Satker)';
+                                    }
+                                }
+
+                                if (count($namaTujuansHTML) > 0) {
+                                    // Gabungkan nama tujuan
+                                    $penerimaHTML = implode(', ', $namaTujuansHTML);
+                                    $penerimaText = implode(', ', $namaTujuansText);
+                                    
+                                    $tujuanAkhirHTML = '<span class="fw-bold text-primary">Universitas</span><br><small class="text-muted">Disposisi ke: ' . $penerimaHTML . '</small>';
+                                    $tujuanModalText = 'Universitas (Disposisi ke: ' . $penerimaText . ')';
+                                } else {
+                                    // Jika benar-benar kosong (Rektor langsung klik selesai tanpa memilih tujuan apapun)
+                                    $tujuanAkhirHTML = '<span class="fw-bold text-primary">Universitas</span><br><small class="text-muted">Arsip Rektor (Tanpa Disposisi)</small>';
+                                    $tujuanModalText = 'Universitas (Arsip Rektor)';
+                                }
+                            } 
+                            elseif ($tipe == 'satker') {
+                                $nama = $surat->tujuanSatker->nama_satker ?? 'Satker Tidak Ditemukan';
+                                $tujuanAkhirHTML = '<span class="fw-bold text-success">' . $nama . '</span> <small>(Langsung)</small>';
+                                $tujuanModalText = $nama . ' (Satker Langsung)';
+                            } 
+                            elseif ($tipe == 'pegawai') {
+                                $nama = $surat->tujuanUser->name ?? 'Pegawai Tidak Ditemukan';
+                                $tujuanAkhirHTML = '<span class="fw-bold text-info">' . $nama . '</span> <small>(Ybs)</small>';
+                                $tujuanModalText = $nama . ' (Pegawai/Ybs)';
+                            } 
+                            elseif ($tipe == 'edaran_semua_satker' || $surat->status == 'selesai_edaran') {
+                                $tujuanAkhirHTML = '<span class="fw-bold text-secondary">Semua Satker (Edaran)</span>';
+                                $tujuanModalText = 'Semua Satker (Edaran)';
+                            }
+                        @endphp
+
                         <tr>
                             <th scope="row" class="text-center">{{ $surat->no_agenda }}</th>
                             <td>{{ $surat->perihal }}</td>
                             <td>{{ $surat->surat_dari }}</td>
                             <td>
-                                @if($surat->status == 'selesai_edaran')
-                                    <span class="badge text-bg-info">Edaran Disebarkan</span>
+                                @if(in_array($surat->status, ['selesai_edaran', 'selesai', 'arsip_satker', 'disimpan', 'diarsipkan', 'di_satker']))
+                                    <span class="badge text-bg-success">Selesai / Diarsipkan</span>
                                 @else
-                                    <span class="badge text-bg-success">Selesai Diteruskan</span>
+                                    <span class="badge text-bg-secondary">{{ $surat->status }}</span>
                                 @endif
                             </td>
                             <td>
-                                @if($surat->status == 'selesai_edaran')
-                                    Semua Satker
-                                @elseif ($surat->disposisis->last())
-                                    <i class="bi bi-arrow-right-short"></i>
-                                    {{ $surat->disposisis->last()->tujuanSatker->nama_satker ?? 'N/A' }}
-                                @else
-                                    <span class="text-danger small"><em>(Data disposisi tidak ditemukan)</em></span>
-                                @endif
+                                {{-- Tampilkan Tujuan Akhir (HTML) --}}
+                                {!! $tujuanAkhirHTML !!}
                             </td>
                             <td class="text-center">
                                 <div class="d-flex justify-content-center gap-1">
+                                    {{-- Tombol Lihat Detail --}}
                                     <button type="button" class="btn btn-sm btn-info" 
                                         title="Lihat Detail"
                                         data-bs-toggle="modal" 
@@ -94,14 +155,17 @@
                                         data-asal-surat="{{ $surat->surat_dari }}"
                                         data-tanggal-surat="{{ $surat->tanggal_surat->isoFormat('D MMMM YYYY') }}"
                                         data-tanggal-diterima="{{ $surat->diterima_tanggal->isoFormat('D MMMM YYYY') }}"
+                                        data-tujuan="{{ $tujuanModalText }}"
                                         data-file-url="{{ Storage::url($surat->file_surat) }}">
                                         <i class="bi bi-eye-fill"></i>
                                     </button>
 
+                                    {{-- Tombol Cetak --}}
                                     <a href="{{ route('cetak.disposisi', $surat->id) }}" target="_blank" class="btn btn-sm btn-outline-danger" title="Cetak Lembar Disposisi">
                                         <i class="bi bi-printer-fill"></i>
                                     </a>
                                     
+                                    {{-- Tombol Timeline Riwayat --}}
                                     <button type="button" class="btn btn-sm btn-secondary" 
                                         title="Lihat Riwayat Lengkap"
                                         data-bs-toggle="modal" 
@@ -112,7 +176,7 @@
                                 </div>
                             </td>
                         </tr>
-                        @endforeach
+                        @endforeach 
                     </tbody>
                 </table>
             </div>
@@ -135,6 +199,10 @@
                         <table class="table table-borderless table-sm small" style="font-size: 13px;">
                            <tr><td class="info-modal-label">No. Agenda</td><td>: <span id="modal-no-agenda"></span></td></tr>
                            <tr><td class="info-modal-label">Asal Surat</td><td>: <span id="modal-asal-surat"></span></td></tr>
+                           
+                           {{-- Baris Tujuan di Modal --}}
+                           <tr><td class="info-modal-label">Tujuan</td><td>: <span id="modal-tujuan" class="fw-bold text-primary"></span></td></tr>
+                           
                            <tr><td class="info-modal-label">Tanggal Surat</td><td>: <span id="modal-tanggal-surat"></span></td></tr>
                            <tr><td class="info-modal-label">Tanggal Diterima</td><td>: <span id="modal-tanggal-diterima"></span></td></tr>
                         </table>
@@ -152,7 +220,7 @@
     </div>
 </div>
 
-{{-- MODAL 2: Riwayat --}}
+{{-- MODAL 2: Riwayat (Timeline) --}}
 <div class="modal fade" id="riwayatModal" tabindex="-1" aria-labelledby="riwayatModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
@@ -161,7 +229,6 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body" id="riwayatModalBody" style="font-size: 13px;">
-                {{-- Konten akan di-load oleh JavaScript --}}
                 <div class="text-center p-4">
                     <div class="spinner-border text-primary" role="status">
                         <span class="visually-hidden">Loading...</span>
@@ -178,12 +245,10 @@
 
 @endsection
 
-
 @push('scripts')
 <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
 <script src="https://cdn.datatables.net/v/bs5/dt-2.1.0/datatables.min.js"></script>
 <script>
-    // Fungsi untuk memformat tanggal JS
     function formatTanggal(dateString) {
         const date = new Date(dateString);
         return date.toLocaleDateString('id-ID', {
@@ -194,7 +259,7 @@
 
     $(document).ready(function () {
         
-        // --- Inisialisasi DataTables ---
+        // DataTables
         new DataTable('#tabelRiwayat', {
             pagingType: 'simple_numbers',
             order: [[ 0, 'desc' ]], 
@@ -208,13 +273,14 @@
             }
         });
         
-        // --- Script untuk Modal Detail Surat (Modal 1) ---
+        // Script Modal Detail (Modal 1)
         var detailSuratModal = document.getElementById('detailSuratModal');
         detailSuratModal.addEventListener('show.bs.modal', function (event) {
             var button = event.relatedTarget;
             var noAgenda = button.getAttribute('data-no-agenda');
             var perihal = button.getAttribute('data-perihal');
             var asalSurat = button.getAttribute('data-asal-surat');
+            var tujuan = button.getAttribute('data-tujuan'); 
             var tanggalSurat = button.getAttribute('data-tanggal-surat');
             var tanggalDiterima = button.getAttribute('data-tanggal-diterima');
             var fileUrl = button.getAttribute('data-file-url');
@@ -222,6 +288,7 @@
             var modalPerihal = detailSuratModal.querySelector('#modal-perihal');
             var modalNoAgenda = detailSuratModal.querySelector('#modal-no-agenda');
             var modalAsalSurat = detailSuratModal.querySelector('#modal-asal-surat');
+            var modalTujuan = detailSuratModal.querySelector('#modal-tujuan'); 
             var modalTanggalSurat = detailSuratModal.querySelector('#modal-tanggal-surat');
             var modalTanggalDiterima = detailSuratModal.querySelector('#modal-tanggal-diterima');
             var modalFileWrapper = detailSuratModal.querySelector('#modal-file-preview-wrapper');
@@ -230,6 +297,7 @@
             modalPerihal.textContent = perihal;
             modalNoAgenda.textContent = noAgenda;
             modalAsalSurat.textContent = asalSurat;
+            modalTujuan.textContent = tujuan; 
             modalTanggalSurat.textContent = tanggalSurat;
             modalTanggalDiterima.textContent = tanggalDiterima;
             
@@ -237,7 +305,8 @@
             modalDownloadButton.setAttribute('download', 'Surat - ' + perihal + '.pdf');
             
             var fileHtml = '';
-            var extension = fileUrl.split('.').pop().toLowerCase();
+            var extension = fileUrl.split('.').pop().toLowerCase().split('?')[0]; 
+            
             if (extension == 'pdf') {
                 fileHtml = '<iframe src="' + fileUrl + '" width="100%" height="100%" frameborder="0"></iframe>';
             } else if (['jpg', 'jpeg', 'png', 'gif'].includes(extension)) {
@@ -248,8 +317,7 @@
             modalFileWrapper.innerHTML = fileHtml;
         });
 
-
-        // --- Script Modal Riwayat (Modal 2) ---
+        // Script Modal Riwayat (Modal 2)
         var riwayatModal = document.getElementById('riwayatModal');
         riwayatModal.addEventListener('show.bs.modal', function (event) {
             var button = event.relatedTarget;
@@ -257,24 +325,20 @@
             var modalBody = riwayatModal.querySelector('#riwayatModalBody');
             var modalLabel = riwayatModal.querySelector('#riwayatModalLabel');
 
-            // 1. Tampilkan loading spinner
             modalBody.innerHTML = `<div class="text-center p-4">
                                      <div class="spinner-border text-primary" role="status"></div>
                                      <p class="mt-2 text-muted">Memuat riwayat...</p>
                                    </div>`;
             modalLabel.textContent = "Riwayat Lengkap Surat";
 
-            // 2. Ambil data JSON dari server
             fetch(dataUrl)
                 .then(response => response.json())
                 .then(surat => {
-                    // 3. Update judul modal
                     modalLabel.textContent = 'Riwayat Surat: ' + surat.perihal;
                     
-                    // 4. Bangun HTML Timeline
                     var html = '<ul class="timeline">';
                     surat.riwayats.forEach((item, index) => {
-                        var badgeClass = 'primary'; // Default
+                        var badgeClass = 'primary'; 
                         if (item.status_aksi.includes('Selesai')) {
                             badgeClass = 'success';
                         } else if (item.status_aksi.includes('Diteruskan')) {
@@ -282,13 +346,9 @@
                         }
                         
                         var icon = 'bi-check';
-                        if (item.status_aksi.includes('Input')) {
-                            icon = 'bi-pencil-fill';
-                        } else if (item.status_aksi.includes('Rektor')) {
-                            icon = 'bi-person-workspace';
-                        } else if (item.status_aksi.includes('Satker')) {
-                            icon = 'bi-send-check-fill';
-                        }
+                        if (item.status_aksi.includes('Input')) icon = 'bi-pencil-fill';
+                        else if (item.status_aksi.includes('Rektor')) icon = 'bi-person-workspace';
+                        else if (item.status_aksi.includes('Satker')) icon = 'bi-send-check-fill';
 
                         html += `<li>
                                     <div class="timeline-badge ${badgeClass}"><i class="bi ${icon}"></i></div>
@@ -308,16 +368,13 @@
                                 </li>`;
                     });
                     html += '</ul>';
-
-                    // 5. Masukkan HTML ke modal body
                     modalBody.innerHTML = html;
                 })
                 .catch(error => {
-                    console.error('Error fetching riwayat:', error);
-                    modalBody.innerHTML = '<div class="alert alert-danger">Gagal memuat riwayat. Silakan coba lagi.</div>';
+                    console.error('Error:', error);
+                    modalBody.innerHTML = '<div class="alert alert-danger">Gagal memuat riwayat.</div>';
                 });
         });
-
     });
 </script>
 @endpush

@@ -51,6 +51,19 @@
 @section('content')
 <div class="container-fluid px-4">
 
+    @if (session('success'))
+        <div class="alert alert-success alert-dismissible fade show" role="alert" style="font-size: 13px;">
+            <i class="bi bi-check-circle-fill me-2"></i> {{ session('success') }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    @endif
+    @if (session('error'))
+        <div class="alert alert-danger alert-dismissible fade show" role="alert" style="font-size: 13px;">
+            <i class="bi bi-exclamation-triangle-fill me-2"></i> {{ session('error') }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    @endif
+
     <div class="card shadow-sm border-0 mb-4">
         <div class="card-header py-3 bg-light border-0">
             <h6 class="m-0 fw-bold text-primary">Daftar Surat Masuk (Perlu Tindak Lanjut Rektor)</h6>
@@ -65,6 +78,7 @@
                             <th scope="col">Asal Surat</th>
                             <th scope="col">Tujuan</th> 
                             <th scope="col">Tanggal Diterima</th>
+                            {{-- Kolom Status DIHAPUS --}}
                             <th scope="col" class="text-center">Aksi</th>
                         </tr>
                     </thead>
@@ -81,7 +95,8 @@
                                 } elseif ($surat->tujuan_user_id) {
                                     $tipe = 'pegawai';
                                 } else {
-                                    $tipe = 'rektor';
+                                    // PERBAIKAN: Default fallback diubah menjadi 'universitas'
+                                    $tipe = 'universitas';
                                 }
                             }
 
@@ -99,14 +114,20 @@
                             if ($tipe == 'rektor') {
                                 $htmlTujuanTabel = '<span class="badge bg-primary">Rektor</span>';
                                 $textTujuanModal = 'Rektor';
-                            } elseif ($tipe == 'satker') {
+                            } 
+                            // --- TAMBAHAN: Logika untuk Universitas ---
+                            elseif ($tipe == 'universitas') {
+                                $htmlTujuanTabel = '<span class="badge bg-primary">Universitas</span>';
+                                $textTujuanModal = 'Universitas';
+                            }
+                            // ------------------------------------------
+                            elseif ($tipe == 'satker') {
                                 $htmlTujuanTabel = '<span class="badge bg-warning text-dark">Satker</span><br><small class="text-muted">'.$detailTujuan.'</small>';
                                 $textTujuanModal = 'Satker (' . $detailTujuan . ')';
                             } elseif ($tipe == 'pegawai') {
                                 $htmlTujuanTabel = '<span class="badge bg-info text-dark">Pegawai</span><br><small class="text-muted">'.$detailTujuan.'</small>';
                                 $textTujuanModal = 'Pegawai (' . $detailTujuan . ')';
                             } elseif ($tipe == 'edaran_semua_satker') {
-                                // KHUSUS EDARAN: Tampilkan "Semua Satker"
                                 $htmlTujuanTabel = '<span class="badge bg-secondary">Semua Satker</span><br><small class="text-muted">Surat Edaran</small>';
                                 $textTujuanModal = 'Semua Satker (Surat Edaran)';
                             } else {
@@ -120,15 +141,16 @@
                             <td>{{ $surat->perihal }}</td>
                             <td>{{ $surat->surat_dari }}</td>
                             
-                            {{-- TAMPILKAN TUJUAN SURAT (HTML DARI PHP DI ATAS) --}}
+                            {{-- TAMPILKAN TUJUAN SURAT --}}
                             <td>{!! $htmlTujuanTabel !!}</td>
 
                             <td>{{ $surat->diterima_tanggal->isoFormat('D MMMM YYYY') }}</td>
                             
+                            {{-- Kolom Status (Badges) DIHAPUS --}}
+
                             <td class="text-center">
                                 <div class="d-flex justify-content-center gap-1">
                                     {{-- Tombol "Lihat" (Modal) --}}
-                                    {{-- Kita kirimkan data-tujuan-lengkap yang sudah diformat dari PHP --}}
                                     <button type="button" class="btn btn-sm btn-info" 
                                         title="Lihat Detail"
                                         data-bs-toggle="modal" 
@@ -224,6 +246,7 @@
         // --- Inisialisasi DataTables ---
         new DataTable('#tabelSuratMasukAdmin', {
             pagingType: 'simple_numbers', 
+            order: [[ 4, 'desc' ]], // Urut berdasarkan tanggal diterima
             language: {
                 search: "Cari:",
                 lengthMenu: "_MENU_", 

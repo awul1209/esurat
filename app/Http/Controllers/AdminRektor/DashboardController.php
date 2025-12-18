@@ -10,81 +10,86 @@ use Carbon\Carbon;
 
 class DashboardController extends Controller
 {
-    /**
-     * Menampilkan dashboard untuk Admin Rektor.
-     */
     public function index()
     {
-        // ====================================================
-        // 1. DATA UNTUK KARTU KPI (DIPERBARUI)
-        // ====================================================
+        // Daftar status yang dianggap "Sudah Masuk / Pernah Masuk" ke Admin Rektor
+        // Kita KECUALIKAN 'baru_di_bau' agar surat yang belum diteruskan BAU tidak muncul.
+        $statusRektor = [
+            'di_admin_rektor', // Sedang di meja Rektor
+            'didisposisi',     // Sudah disposisi, balik ke BAU
+            'di_satker',       // Sudah sampai Satker tujuan
+            'selesai',         // Selesai Arsip
+            'arsip_satker',
+            'disimpan',
+            'diarsipkan',
+            'selesai_edaran'
+        ];
 
-        // Data 1: Surat yang perlu disposisi (pekerjaan saat ini)
+        // ====================================================
+        // 1. DATA KARTU KPI
+        // ====================================================
         $perluDisposisi = Surat::where('status', 'di_admin_rektor')->count();
         
-        // Data 2: Surat yang sudah selesai didisposisi (total)
-        // PERBAIKAN: Hitung 'didisposisi' (menunggu BAU) + 'selesai' (final)
-        $sudahDisposisi = Surat::whereIn('status', ['didisposisi', 'selesai'])->count();
-
-        // Data 3: Total surat yang pernah ditangani
+        // Menghitung yang sudah selesai diproses oleh Rektor
+        $sudahDisposisi = Surat::whereIn('status', [
+            'didisposisi', 'selesai', 'di_satker', 'arsip_satker', 'disimpan', 'diarsipkan', 'selesai_edaran'
+        ])->count();
+        
         $totalDiterima = $perluDisposisi + $sudahDisposisi;
 
-
         // ====================================================
-        // 2. DATA UNTUK TABEL "TINDAKAN CEPAT"
-        // (Tidak berubah, tetap ambil yang status 'di_admin_rektor')
+        // 2. DATA TABEL "TINDAKAN CEPAT"
         // ====================================================
         $suratBaru = Surat::where('status', 'di_admin_rektor')
                         ->latest('diterima_tanggal')
                         ->take(5)
                         ->get();
 
-
         // ====================================================
-        // 3. DATA UNTUK PIE CHART (DIPERBARUI)
+        // 3. DATA PIE CHART (Komposisi: Internal vs Eksternal)
         // ====================================================
         
-        // PERBAIKAN: Tambahkan status 'selesai' ke dalam query
-        $pieChartData = Surat::whereIn('status', ['di_admin_rektor', 'didisposisi', 'selesai'])
+        $pieChartData = Surat::whereIn('tujuan_tipe', ['rektor', 'universitas'])
+                            ->whereIn('status', $statusRektor) // [PERBAIKAN] Tambahkan Filter Status
                             ->select('tipe_surat', DB::raw('count(*) as jumlah'))
                             ->groupBy('tipe_surat')
                             ->get();
 
         $pieLabels = $pieChartData->pluck('tipe_surat')->map(function ($tipe) {
-            return ucwords($tipe); 
+            return ucfirst($tipe); 
         });
         $pieData = $pieChartData->pluck('jumlah');
 
-
         // ====================================================
-        // 4. DATA UNTUK LINE CHART (DIPERBARUI)
+        // 4. DATA LINE CHART (Tren 7 Hari Terakhir)
         // ====================================================
         
-        // PERBAIKAN: Tambahkan status 'selesai' ke dalam query
-        $lineDataRaw = Surat::where('diterima_tanggal', '>=', Carbon::now()->subDays(6))
-                            ->whereIn('status', ['di_admin_rektor', 'didisposisi', 'selesai']) // <-- Perubahan di sini
+        $sevenDaysAgo = Carbon::now()->subDays(6)->startOfDay();
+        
+        // Query Surat Rektor 7 Hari Terakhir
+        $lineDataRaw = Surat::where('diterima_tanggal', '>=', $sevenDaysAgo)
+                            ->whereIn('tujuan_tipe', ['rektor', 'universitas'])
+                            ->whereIn('status', $statusRektor) // [PERBAIKAN] Tambahkan Filter Status
+                            ->select(
+                                DB::raw('DATE(diterima_tanggal) as tanggal'), 
+                                DB::raw('count(*) as jumlah')
+                            )
                             ->groupBy('tanggal')
-                            ->orderBy('tanggal', 'asc')
-                            ->get([
-                                DB::raw('DATE(diterima_tanggal) as tanggal'),
-                                DB::raw('COUNT(*) as jumlah')
-                            ]);
+                            ->get();
 
-        // Siapkan 7 hari terakhir sebagai label
+        $dataMap = $lineDataRaw->pluck('jumlah', 'tanggal')->toArray();
+
         $lineLabels = [];
         $lineData = [];
-        $tanggalDataMap = $lineDataRaw->pluck('jumlah', 'tanggal');
 
         for ($i = 6; $i >= 0; $i--) {
-            $tanggal = Carbon::now()->subDays($i)->format('Y-m-d');
-            $lineLabels[] = Carbon::now()->subDays($i)->isoFormat('DD MMM');
-            $lineData[] = $tanggalDataMap[$tanggal] ?? 0; 
+            $dateObj = Carbon::now()->subDays($i);
+            $dateString = $dateObj->format('Y-m-d'); 
+            
+            $lineLabels[] = $dateObj->isoFormat('dddd, D MMM'); 
+            $lineData[] = $dataMap[$dateString] ?? 0;
         }
 
-
-        // ====================================================
-        // 5. KIRIM SEMUA DATA KE VIEW
-        // ====================================================
         return view('admin_rektor.dashboard', compact(
             'perluDisposisi',
             'sudahDisposisi',

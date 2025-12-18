@@ -13,11 +13,23 @@ class SuratMasukController extends Controller
      */
     public function index()
     {
-        // Ambil SEMUA surat yang statusnya 'di_admin_rektor'
+        // Filter tipe_surat = 'eksternal' agar tidak tercampur
         $semuaSurat = Surat::where('status', 'di_admin_rektor')
+                            ->where('tipe_surat', 'eksternal') 
                             ->latest('diterima_tanggal')
                             ->get();
         
         return view('admin_rektor.surat_masuk_index', compact('semuaSurat'));
+    }
+
+    public function indexInternal()
+    {
+        // Filter tipe_surat = 'internal'
+        $suratInternal = Surat::where('status', 'di_admin_rektor')
+                            ->where('tipe_surat', 'internal')
+                            ->latest('diterima_tanggal')
+                            ->get();
+
+        return view('admin_rektor.surat_masuk_internal', compact('suratInternal'));
     }
 }

@@ -32,12 +32,13 @@ class UserController extends Controller
     /**
      * Menyimpan user baru ke database.
      */
-    public function store(Request $request)
+  public function store(Request $request)
     {
         // 1. Validasi
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'email' => 'required|string|email|max:255|unique:users,email',
+            'no_hp' => 'nullable|string|max:20', // <--- TAMBAHAN BARU
             'password' => 'required|string|min:8|confirmed',
             'role' => 'required|in:bau,admin_rektor,satker,pegawai',
             'satker_id' => 'nullable|exists:satkers,id',
@@ -47,12 +48,12 @@ class UserController extends Controller
         User::create([
             'name' => $validated['name'],
             'email' => $validated['email'],
+            'no_hp' => $validated['no_hp'], // <--- SIMPAN NO HP
             'password' => Hash::make($validated['password']),
             'role' => $validated['role'],
             'satker_id' => $validated['satker_id'],
         ]);
 
-        // 3. Redirect
         return redirect()->route('bau.manajemen-user.index')->with('success', 'User baru berhasil dibuat.');
     }
 
@@ -69,18 +70,19 @@ class UserController extends Controller
     /**
      * Mengupdate data user di database.
      */
-    public function update(Request $request, User $manajemen_user)
+   public function update(Request $request, User $manajemen_user)
     {
-        $user = $manajemen_user; // Ganti nama
+        $user = $manajemen_user;
 
         // 1. Validasi
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'email' => [
                 'required', 'string', 'email', 'max:255',
-                Rule::unique('users')->ignore($user->id), // Abaikan email user ini sendiri
+                Rule::unique('users')->ignore($user->id),
             ],
-            'password' => 'nullable|string|min:8|confirmed', // Password Boleh Kosong
+            'no_hp' => 'nullable|string|max:20', // <--- TAMBAHAN BARU
+            'password' => 'nullable|string|min:8|confirmed',
             'role' => 'required|in:bau,admin_rektor,satker,pegawai',
             'satker_id' => 'nullable|exists:satkers,id',
         ]);
@@ -88,18 +90,17 @@ class UserController extends Controller
         // 2. Update data dasar
         $user->name = $validated['name'];
         $user->email = $validated['email'];
+        $user->no_hp = $validated['no_hp']; // <--- UPDATE NO HP
         $user->role = $validated['role'];
         $user->satker_id = $validated['satker_id'];
 
-        // 3. Cek jika password diisi (untuk reset)
+        // 3. Cek jika password diisi
         if ($request->filled('password')) {
             $user->password = Hash::make($validated['password']);
         }
 
-        // 4. Simpan
         $user->save();
 
-        // 5. Redirect
         return redirect()->route('bau.manajemen-user.index')->with('success', 'Data user berhasil diperbarui.');
     }
 

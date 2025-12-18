@@ -31,6 +31,13 @@
                             <input type="text" class="form-control @error('name') is-invalid @enderror" id="name" name="name" value="{{ old('name') }}" required>
                             @error('name') <div class="invalid-feedback">{{ $message }}</div> @enderror
                         </div>
+                                                <div class="mb-3">
+                            <label for="no_hp" class="form-label">No. HP (WhatsApp)</label>
+                            <input type="text" class="form-control" id="no_hp" name="no_hp" 
+                                placeholder="Contoh: 08123456789 (Format sesuai API)" 
+                                value="{{ old('no_hp') }}">
+                            <div class="form-text">Nomor ini akan menerima notifikasi disposisi surat.</div>
+                        </div>
 
                         <div class="mb-3">
                             <label for="email" class="form-label">Email: <span class="text-danger">*</span></label>
