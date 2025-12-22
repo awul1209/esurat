@@ -78,4 +78,10 @@ class Surat extends Model
     {
         return $this->belongsTo(User::class, 'user_id');
     }
+    // Relasi Many-to-Many ke Klasifikasi
+public function klasifikasis()
+{
+    // Parameter 2: nama tabel pivot yg tadi dibuat
+    return $this->belongsToMany(Klasifikasi::class, 'klasifikasi_surat');
+}
 }

@@ -40,6 +40,7 @@
                         <tr>
                             <th scope="col">Nama</th>
                             <th scope="col">Email</th>
+                            <th scope="col">No. Hp</th>
                             <th scope="col">Role</th>
                             <th scope="col">Satuan Kerja (Satker)</th>
                             <th scope="col" class="text-center">Aksi</th>
@@ -50,6 +51,7 @@
                         <tr>
                             <td>{{ $user->name }}</td>
                             <td>{{ $user->email }}</td>
+                            <td>{{ $user->no_hp }}</td>
                             <td>
                                 <span class="badge 
                                     @if($user->role == 'bau') text-bg-danger

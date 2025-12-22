@@ -12,9 +12,17 @@ use App\Models\Satker;
 use App\Models\Disposisi; // Pastikan import model Disposisi
 use Illuminate\Support\Facades\DB; 
 
+use Maatwebsite\Excel\Facades\Excel;
+use Maatwebsite\Excel\Concerns\FromCollection;
+use Maatwebsite\Excel\Concerns\WithHeadings;
+use Maatwebsite\Excel\Concerns\WithMapping;
+use Maatwebsite\Excel\Concerns\ShouldAutoSize;
+use Maatwebsite\Excel\Concerns\WithStyles;
+use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
+
 class SuratController extends Controller
 {
-    public function indexMasukEksternal()
+   public function indexMasukEksternal()
     {
         $user = Auth::user();
         $satkerId = $user->satker_id;
@@ -33,6 +41,16 @@ class SuratController extends Controller
                 // 2. Jalur Langsung
                 ->orWhere('tujuan_satker_id', $satkerId);
             })
+            
+            // --- PERBAIKAN DISINI ---
+            // Filter agar HANYA mengambil yang BUKAN internal.
+            // Kita gunakan whereNull juga untuk jaga-jaga jika ada data lama yang tipenya kosong (biasanya eksternal).
+            ->where(function($q) {
+                $q->where('tipe_surat', '!=', 'internal')
+                  ->orWhereNull('tipe_surat');
+            })
+            // ------------------------
+
             // Filter status global agar yang belum dikirim BAU tidak muncul
             ->whereIn('status', ['di_satker', 'selesai', 'arsip_satker', 'didisposisi'])
             ->with(['disposisis.tujuanSatker', 'tujuanUser', 'tujuanSatker', 'delegasiPegawai']) 
@@ -47,6 +65,120 @@ class SuratController extends Controller
             'suratEdaran',
             'daftarPegawai'
         ));
+    }
+
+ public function exportMasukEksternal(Request $request)
+    {
+        $startDate = $request->start_date;
+        $endDate   = $request->end_date;
+        $user      = Auth::user();
+        $satkerId  = $user->satker_id;
+
+        $export = new class($startDate, $endDate, $user, $satkerId) implements FromCollection, WithHeadings, WithMapping, ShouldAutoSize, WithStyles {
+            
+            protected $startDate;
+            protected $endDate;
+            protected $user;
+            protected $satkerId;
+
+            public function __construct($startDate, $endDate, $user, $satkerId)
+            {
+                $this->startDate = $startDate;
+                $this->endDate   = $endDate;
+                $this->user      = $user;
+                $this->satkerId  = $satkerId;
+            }
+
+           public function collection()
+            {
+                // ==========================================
+                // BAGIAN 1: SURAT MASUK (LOGIKA DARI INDEX)
+                // ==========================================
+                $query1 = \App\Models\Surat::query();
+
+                // 1. Jalur (Sama persis dengan Index)
+                $query1->where(function($masterQ) {
+                    // Jalur Disposisi
+                    $masterQ->whereHas('disposisis', function ($q) {
+                        $q->where('tujuan_satker_id', $this->satkerId);
+                    })
+                    // Jalur Langsung
+                    ->orWhere('tujuan_satker_id', $this->satkerId);
+                });
+
+                // 2. Filter Status (Sama persis dengan Index)
+                // Hapus 'disimpan' jika di index tidak ada, agar konsisten
+                $query1->whereIn('status', ['di_satker', 'selesai', 'arsip_satker', 'didisposisi']);
+
+                // 3. Filter Tipe (PENGAMAN PENTING)
+                // Agar Surat Internal Manual tidak ikut, TAPI Surat Eksternal (yang mungkin null) TETAP IKUT
+                $query1->where(function($q) {
+                    $q->where('tipe_surat', '!=', 'internal') // Buang yang jelas-jelas internal
+                      ->orWhereNull('tipe_surat');            // TAPI ambil yang kosong (biasanya eksternal lama)
+                });
+
+                // 4. Filter Tanggal
+                if ($this->startDate && $this->endDate) {
+                    $query1->whereBetween('diterima_tanggal', [$this->startDate, $this->endDate]);
+                }
+                
+                $suratMasuk = $query1->get();
+
+
+                // ==========================================
+                // BAGIAN 2: SURAT EDARAN (LOGIKA DARI INDEX)
+                // ==========================================
+                $query2 = \App\Models\Surat::select('surats.*')
+                        ->join('surat_edaran_satker', 'surats.id', '=', 'surat_edaran_satker.surat_id')
+                        ->where('surat_edaran_satker.satker_id', $this->satkerId);
+                
+                if ($this->startDate && $this->endDate) {
+                    $query2->whereBetween('surats.diterima_tanggal', [$this->startDate, $this->endDate]);
+                }
+                $suratEdaran = $query2->get();
+
+
+                // ==========================================
+                // BAGIAN 3: PENGGABUNGAN (SAMA SEPERTI VIEW)
+                // ==========================================
+                return $suratMasuk->merge($suratEdaran)
+                                  ->unique('id')
+                                  ->sortByDesc('diterima_tanggal');
+            }
+
+            public function headings(): array
+            {
+                return [
+                    'No', 'No Surat', 'Tanggal Surat', 'Diterima Tanggal', 'Perihal', 'Pengirim', 'Sifat', 'Link Surat'
+                ];
+            }
+
+            public function map($surat): array
+            {
+                static $no = 0;
+                $no++;
+
+                $linkFile = $surat->file_surat ? url('storage/' . $surat->file_surat) : 'Tidak ada file';
+
+                return [
+                    $no,
+                    $surat->nomor_surat,
+                    \Carbon\Carbon::parse($surat->tanggal_surat)->format('d-m-Y'),
+                    \Carbon\Carbon::parse($surat->diterima_tanggal)->format('d-m-Y'),
+                    $surat->perihal,
+                    $surat->surat_dari,
+                    $surat->sifat ?? 'Biasa',
+                    $linkFile
+                ];
+            }
+
+            public function styles(Worksheet $sheet)
+            {
+                return [ 1 => ['font' => ['bold' => true]] ];
+            }
+        };
+
+        return Excel::download($export, 'Laporan_Surat_Masuk_Eksternal_' . date('d-m-Y_H-i') . '.xlsx');
     }
 
     // ... method index dll yang sudah ada ...
@@ -90,7 +222,7 @@ class SuratController extends Controller
                 'diterima_tanggal' => $request->diterima_tanggal,
                 'file_surat'       => $path,
                 'sifat'            => 'Asli',
-                'no_agenda'        => 'M-' . time(),
+                'no_agenda'        => 'ME-' . time(),
                 'tujuan_tipe'      => 'satker',
                 'tujuan_satker_id' => $user->satker_id,
                 'status'           => $statusAwal, // <--- KUNCI PERBAIKANNYA DISINI

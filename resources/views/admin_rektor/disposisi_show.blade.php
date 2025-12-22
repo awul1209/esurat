@@ -172,14 +172,19 @@
                                 Surat untuk <strong>Universitas</strong>. Mohon berikan disposisi ke Unit/Satker terkait.
                             </div>
 
-                            {{-- 1. KLASIFIKASI --}}
+                            {{-- 1. KLASIFIKASI (MULTI SELECT) --}}
                             <div class="mb-3">
                                 <label for="klasifikasi_id" class="form-label">Klasifikasi Arsip:</label>
-                                <select class="form-select select2" id="klasifikasi_id" name="klasifikasi_id" required>
-                                    <option value="">-- Pilih Klasifikasi --</option>
+                                {{-- 
+                                    PENTING: 
+                                    1. class="select2" -> Agar tampilan tetap dropdown cantik.
+                                    2. multiple="multiple" -> Agar bisa pilih banyak.
+                                    3. name="klasifikasi_ids[]" -> Agar tersimpan sebagai array.
+                                --}}
+                                <select class="form-select select2" id="klasifikasi_id" name="klasifikasi_ids[]" multiple="multiple" required>
                                     @foreach($daftarKlasifikasi as $klasifikasi)
                                         <option value="{{ $klasifikasi->id }}">
-                                                {{ $klasifikasi->nama_klasifikasi }}
+                                            {{ $klasifikasi->nama_klasifikasi }}
                                         </option>
                                     @endforeach
                                 </select>
@@ -235,30 +240,40 @@
 
 <script>
     $(document).ready(function() {
-        // Inisialisasi Select2
+        // Inisialisasi Select2 (Wajib agar tampilan dropdown rapi)
         $('.select2').select2({
             theme: 'bootstrap-5',
             width: '100%',
             placeholder: 'Silakan pilih...',
-            allowClear: true,
-            closeOnSelect: false 
+            allowClear: true
         });
 
-        // Referensi Elemen
+        // Referensi Elemen (SAMA PERSIS DENGAN KODE ANDA)
         const elKlasifikasi = $('#klasifikasi_id');
         const elSatker = $('#tujuan_satker_ids');
         const wrapSatker = $('#wrapper_satker');
         const wrapLain = $('#wrapper_tujuan_lain');
         const wrapCatatan = $('#wrapper_catatan');
-        const inputLain = $('#disposisi_lain'); // ID updated
-        
+        const inputLain = $('#disposisi_lain');
+
         // Logika Show/Hide
         function updateUI() {
-            // Cek Klasifikasi (Arsip vs Bukan)
-            var selectedOption = elKlasifikasi.find('option:selected');
-            var klasifikasiText = selectedOption.length ? selectedOption.text().toLowerCase() : '';
-            var isArsip = klasifikasiText.includes('arsip');
+            // --- BAGIAN INI SAYA SESUAIKAN UNTUK MULTI SELECT ---
+            var isArsip = false;
+            
+            // Ambil semua opsi yang dipilih user
+            var selectedOptions = elKlasifikasi.find('option:selected');
 
+            // Cek satu per satu. Jika ada SATU SAJA yang mengandung kata "arsip", maka isArsip = true
+            selectedOptions.each(function() {
+                if ($(this).text().toLowerCase().includes('arsip')) {
+                    isArsip = true;
+                    return false; // Stop looping jika sudah ketemu
+                }
+            });
+            // -----------------------------------------------------
+
+            // --- BAGIAN KE BAWAH INI SAMA PERSIS DENGAN LOGIKA ASLI ANDA ---
             if (isArsip) {
                 // Jika Arsip -> Sembunyikan Semua Tujuan
                 wrapSatker.hide();
@@ -274,7 +289,7 @@
                 
                 // 1. CEK UNTUK OPSI "LAINNYA"
                 if (selectedSatkers.includes('lainnya')) {
-                    wrapLain.slideDown(); // Tampilkan input text
+                    wrapLain.slideDown(); 
                     inputLain.prop('required', true);
                 } else {
                     wrapLain.slideUp();
@@ -283,7 +298,6 @@
                 }
                 
                 // 2. CEK UNTUK CATATAN REKTOR
-                // Logika Baru: Tampilkan catatan jika ada APAPUN yang dipilih (Satker atau Lainnya)
                 if (selectedSatkers.length > 0) {
                     wrapCatatan.slideDown();
                 } else {

@@ -20,18 +20,11 @@
         .checklist-table th { text-align: center; font-weight: bold; background: #e0e0e0; padding: 5px; border: 1px solid #000; font-size: 10pt; }
         .checklist-table td { vertical-align: top; padding: 5px; border: 1px solid #000; font-size: 9pt; }
         
-        /* CSS Checkbox */
         .checkbox {
-            font-family: 'DejaVu Sans', sans-serif; /* Wajib font ini agar centang muncul */
-            display: inline-block;
-            width: 12px;
-            height: 12px;
-            border: 1px solid #000;
-            text-align: center;
-            line-height: 11px; 
-            font-size: 11px; 
-            margin-right: 4px;
-            vertical-align: middle;
+            font-family: 'DejaVu Sans', sans-serif; 
+            display: inline-block; width: 12px; height: 12px;
+            border: 1px solid #000; text-align: center;
+            line-height: 11px; font-size: 11px; margin-right: 4px; vertical-align: middle;
         }
         
         .faculty-table { width: 100%; border: none; }
@@ -45,47 +38,48 @@
         .footer { margin-top: 30px; width: 300px; float: right; text-align: center; }
         .footer .signature-space { height: 70px; }
         .footer .name { font-weight: bold; text-decoration: underline; }
+
+        /* CSS KHUSUS LAMPIRAN */
+        .page-break { page-break-before: always; }
+        .lampiran-container { text-align: center; width: 100%; }
+        .lampiran-img { max-width: 100%; height: auto; border: 1px solid #ccc; }
+        .lampiran-note { 
+            border: 2px dashed #999; 
+            padding: 20px; 
+            text-align: center; 
+            margin-top: 50px; 
+            color: #555;
+            background: #f9f9f9;
+        }
     </style>
 </head>
 <body>
 
     @php
-        // ====================================================================
-        // FUNGSI CENTANG PINTAR (Case Insensitive & Trim Spasi)
-        // ====================================================================
+        // ... (PHP Logic Anda Tetap Sama) ...
         function centang($nama_target, $list_terpilih, $force_check = false) {
             $isi = ' '; 
             $isFound = false;
-
-            // 1. Jika dipaksa centang (misal: Disposisi Lain yang manual)
-            if ($force_check) {
-                $isFound = true;
-            } 
-            // 2. Cek Array dengan Case Insensitive
+            if ($force_check) { $isFound = true; } 
             else if (is_array($list_terpilih)) {
                 foreach ($list_terpilih as $item) {
-                    // Bandingkan string tanpa peduli besar/kecil dan spasi
-                    // strcasecmp return 0 jika sama
                     if (strcasecmp(trim($item), trim($nama_target)) == 0) {
-                        $isFound = true;
-                        break;
+                        $isFound = true; break;
                     }
                 }
             }
-
-            if ($isFound) {
-                $isi = '✓'; 
-            }
+            if ($isFound) { $isi = '✓'; }
             return '<span class="checkbox">' . ($isi === ' ' ? '&nbsp;' : $isi) . '</span>';
         }
 
-        // ====================================================================
-        // DATA PROCESSING
-        // ====================================================================
+        function centangId($target_id, $selected_ids) {
+            $isi = in_array($target_id, $selected_ids) ? '✓' : '&nbsp;';
+            return '<span class="checkbox">' . $isi . '</span>';
+        }
+
         $disposisiRektorPertama = $disposisis->first();
         $catatanRektorUtama = $disposisiRektorPertama->catatan_rektor ?? '-';
         
-        // Logika Tipe Tujuan untuk Header
         $tipe_tujuan_fix = $surat->tujuan_tipe;
         if (empty($tipe_tujuan_fix)) {
             if ($surat->tujuan_satker_id) $tipe_tujuan_fix = 'satker';
@@ -94,16 +88,16 @@
         }
     @endphp
 
+    {{-- HALAMAN 1: LEMBAR DISPOSISI (KODE ASLI ANDA) --}}
     <img src="{{ resource_path('images/unija.jpg') }}" alt="Logo" class="logo">
 
-    {{-- Header --}}
     <div class="header">
         <h1>UNIVERSITAS WIRARAJA</h1>
         <h2>REKTOR</h2>
         <h3>LEMBAR DISPOSISI</h3>
     </div>
 
-    {{-- Info Surat --}}
+    {{-- ... Tabel Info Surat ... --}}
     <table class="info-table">
         <tr>
             <td class="label">Surat dari</td><td class="colon">:</td>
@@ -135,73 +129,32 @@
         </tr>
     </table>
 
-    {{-- Checklist Disposisi --}}
+    {{-- ... Tabel Checklist ... --}}
     <table class="checklist-table">
         <tr>
             <th style="width: 55%;">DITERUSKAN KEPADA</th>
             <th style="width: 45%;">INSTRUKSI / KLASIFIKASI</th>
         </tr>
         <tr>
-            {{-- KOLOM KIRI: Daftar Pimpinan, Fakultas & LAINNYA --}}
             <td style="line-height: 1.3;">
-                
                 Wakil Rektor I {!! centang('Wakil Rektor I', $satkerTujuanList) !!} &nbsp;
                 II {!! centang('Wakil Rektor II', $satkerTujuanList) !!} &nbsp;
                 III {!! centang('Wakil Rektor III', $satkerTujuanList) !!}
                 <br>
                 <div style="margin: 3px 0; border-bottom: 1px dashed #ccc;"></div>
                 
+                {{-- COPY PASTE TABLE FAKULTAS ANDA DISINI --}}
                 <table class="faculty-table">
-                    <tr>
-                        <td>Dekan</td><td>{!! centang('Dekan FP', $satkerTujuanList) !!}</td>
-                        <td>Wadek I</td><td>{!! centang('Wadek I FP', $satkerTujuanList) !!}</td>
-                        <td>II</td><td>{!! centang('Wadek II FP', $satkerTujuanList) !!}</td>
-                        <td class="faculty-name">FP</td>
-                    </tr>
-                    <tr>
-                        <td>Dekan</td><td>{!! centang('Dekan FH', $satkerTujuanList) !!}</td>
-                        <td>Wadek I</td><td>{!! centang('Wadek I FH', $satkerTujuanList) !!}</td>
-                        <td>II</td><td>{!! centang('Wadek II FH', $satkerTujuanList) !!}</td>
-                        <td class="faculty-name">FH</td>
-                    </tr>
-                    <tr>
-                        <td>Dekan</td><td>{!! centang('Dekan FEB', $satkerTujuanList) !!}</td>
-                        <td>Wadek I</td><td>{!! centang('Wadek I FEB', $satkerTujuanList) !!}</td>
-                        <td>II</td><td>{!! centang('Wadek II FEB', $satkerTujuanList) !!}</td>
-                        <td class="faculty-name">FEB</td>
-                    </tr>
-                    <tr>
-                        <td>Dekan</td><td>{!! centang('Dekan FISIP', $satkerTujuanList) !!}</td>
-                        <td>Wadek I</td><td>{!! centang('Wadek I FISIP', $satkerTujuanList) !!}</td>
-                        <td>II</td><td>{!! centang('Wadek II FISIP', $satkerTujuanList) !!}</td>
-                        <td class="faculty-name">FISIP</td>
-                    </tr>
-                    <tr>
-                        <td>Dekan</td><td>{!! centang('Dekan FT', $satkerTujuanList) !!}</td>
-                        <td>Wadek I</td><td>{!! centang('Wadek I FT', $satkerTujuanList) !!}</td>
-                        <td>II</td><td>{!! centang('Wadek II FT', $satkerTujuanList) !!}</td>
-                        <td class="faculty-name">FT</td>
-                    </tr>
-                    <tr>
-                        <td>Dekan</td><td>{!! centang('Dekan FIK', $satkerTujuanList) !!}</td>
-                        <td>Wadek I</td><td>{!! centang('Wadek I FIK', $satkerTujuanList) !!}</td>
-                        <td>II</td><td>{!! centang('Wadek II FIK', $satkerTujuanList) !!}</td>
-                        <td class="faculty-name">FIK</td>
-                    </tr>
-                    <tr>
-                        <td>Dekan</td><td>{!! centang('Dekan FKIP', $satkerTujuanList) !!}</td>
-                        <td>Wadek I</td><td>{!! centang('Wadek I FKIP', $satkerTujuanList) !!}</td>
-                        <td>II</td><td>{!! centang('Wadek II FKIP', $satkerTujuanList) !!}</td>
-                        <td class="faculty-name">FKIP</td>
-                    </tr>
-                    <tr>
-                        <td>Direktur</td><td>{!! centang('Direktur PASCASARJANA', $satkerTujuanList) !!}</td>
-                        <td>Wadek I</td><td>{!! centang('Wadek I PASCASARJANA', $satkerTujuanList) !!}</td>
-                        <td>II</td><td>{!! centang('Wadek II PASCASARJANA', $satkerTujuanList) !!}</td>
-                        <td class="faculty-name">PASCASARJANA</td>
-                    </tr>
+                    <tr><td>Dekan</td><td>{!! centang('Dekan FP', $satkerTujuanList) !!}</td><td>Wadek I</td><td>{!! centang('Wadek I FP', $satkerTujuanList) !!}</td><td>II</td><td>{!! centang('Wadek II FP', $satkerTujuanList) !!}</td><td class="faculty-name">FP</td></tr>
+                    <tr><td>Dekan</td><td>{!! centang('Dekan FH', $satkerTujuanList) !!}</td><td>Wadek I</td><td>{!! centang('Wadek I FH', $satkerTujuanList) !!}</td><td>II</td><td>{!! centang('Wadek II FH', $satkerTujuanList) !!}</td><td class="faculty-name">FH</td></tr>
+                    <tr><td>Dekan</td><td>{!! centang('Dekan FEB', $satkerTujuanList) !!}</td><td>Wadek I</td><td>{!! centang('Wadek I FEB', $satkerTujuanList) !!}</td><td>II</td><td>{!! centang('Wadek II FEB', $satkerTujuanList) !!}</td><td class="faculty-name">FEB</td></tr>
+                    <tr><td>Dekan</td><td>{!! centang('Dekan FISIP', $satkerTujuanList) !!}</td><td>Wadek I</td><td>{!! centang('Wadek I FISIP', $satkerTujuanList) !!}</td><td>II</td><td>{!! centang('Wadek II FISIP', $satkerTujuanList) !!}</td><td class="faculty-name">FISIP</td></tr>
+                    <tr><td>Dekan</td><td>{!! centang('Dekan FT', $satkerTujuanList) !!}</td><td>Wadek I</td><td>{!! centang('Wadek I FT', $satkerTujuanList) !!}</td><td>II</td><td>{!! centang('Wadek II FT', $satkerTujuanList) !!}</td><td class="faculty-name">FT</td></tr>
+                    <tr><td>Dekan</td><td>{!! centang('Dekan FIK', $satkerTujuanList) !!}</td><td>Wadek I</td><td>{!! centang('Wadek I FIK', $satkerTujuanList) !!}</td><td>II</td><td>{!! centang('Wadek II FIK', $satkerTujuanList) !!}</td><td class="faculty-name">FIK</td></tr>
+                    <tr><td>Dekan</td><td>{!! centang('Dekan FKIP', $satkerTujuanList) !!}</td><td>Wadek I</td><td>{!! centang('Wadek I FKIP', $satkerTujuanList) !!}</td><td>II</td><td>{!! centang('Wadek II FKIP', $satkerTujuanList) !!}</td><td class="faculty-name">FKIP</td></tr>
+                    <tr><td>Direktur</td><td>{!! centang('Direktur PASCASARJANA', $satkerTujuanList) !!}</td><td>Wadek I</td><td>{!! centang('Wadek I PASCASARJANA', $satkerTujuanList) !!}</td><td>II</td><td>{!! centang('Wadek II PASCASARJANA', $satkerTujuanList) !!}</td><td class="faculty-name">PASCASARJANA</td></tr>
                 </table>
-                
+
                 <div style="margin: 3px 0; border-bottom: 1px dashed #ccc;"></div>
 
                 {!! centang('Ketua Pusat Jaminan Mutu', $satkerTujuanList) !!} Ketua Pusat Jaminan Mutu <br>
@@ -222,37 +175,21 @@
                 {!! centang('Kepala Sekretarian', $satkerTujuanList) !!} Kepala Sekretarian <br>
                 {!! centang('Sekretaris Rektor', $satkerTujuanList) !!} Sekretaris Rektor <br>
 
-                {{-- MENAMPILKAN DISPOSISI LAIN (Manual Input) --}}
                 @if(!empty($disposisiLain))
                     <div style="margin-top: 2px;">
                         {!! centang($disposisiLain, [], true) !!} <strong>{{ $disposisiLain }}</strong>
                     </div>
                 @endif
-
             </td>
             
-            {{-- KOLOM KANAN: INSTRUKSI (SEKARANG LEBIH PINTAR DETEKSI TEXT) --}}
             <td style="line-height: 1.4;">
-                {!! centang('Segera', $klasifikasiList) !!} Segera<br>
-                {!! centang('Untuk Disposisi', $klasifikasiList) !!} Untuk Disposisi<br>
-                {!! centang('Mohon Tindak Lanjut', $klasifikasiList) !!} Mohon Tindak Lanjut<br>
-                {!! centang('Selesaikan', $klasifikasiList) !!} Selesaikan<br>
-                {!! centang('Pedomani', $klasifikasiList) !!} Pedomani<br>
-                {!! centang('Sarankan', $klasifikasiList) !!} Sarankan<br>
-                {!! centang('Untuk Diketahui', $klasifikasiList) !!} Untuk Diketahui<br>
-                {!! centang('Untuk Diproses', $klasifikasiList) !!} Untuk Diproses<br>
-                {!! centang('Siapkan Bahan', $klasifikasiList) !!} Siapkan Bahan<br>
-                {!! centang('Sampaikan Kpd Ybs', $klasifikasiList) !!} Sampaikan Kpd Ybs<br>
-                {!! centang('Pertimbangkan', $klasifikasiList) !!} Pertimbangkan<br>
-                {!! centang('Agar Menghadap Saya', $klasifikasiList) !!} Agar Menghadap Saya<br>
-                {!! centang('Agendakan', $klasifikasiList) !!} Agendakan<br>
-                {!! centang('Laporkan Hasilnya', $klasifikasiList) !!} Laporkan Hasilnya<br>
-                {!! centang('Untuk Diwakili', $klasifikasiList) !!} Untuk Diwakili<br>
+                @foreach($daftarKlasifikasi as $item)
+                    {!! centangId($item->id, $selectedKlasifikasiIds) !!} {{ $item->nama_klasifikasi }} <br>
+                @endforeach
             </td>
         </tr>
     </table>
 
-    {{-- ALUR DISPOSISI BAWAH (FULL WIDTH UNTUK CATATAN REKTOR) --}}
     <table class="flow-table">
         <tr>
             <td colspan="3" style="min-height: 100px;">
@@ -264,7 +201,6 @@
         </tr>
     </table>
 
-    {{-- Footer --}}
     <div class="footer">
         Sumenep, {{ \Carbon\Carbon::parse($disposisiRektorPertama ? $disposisiRektorPertama->created_at : $surat->created_at)->isoFormat('D MMMM YYYY') }}<br>
         REKTOR,<br>
@@ -272,6 +208,43 @@
         <div class="name">Dr. Sjaifurrachman, S.H., C.N., M.H.</div>
         NIDN. 0722086203
     </div>
+
+    {{-- ================================================================= --}}
+    {{-- HALAMAN 2: LAMPIRAN FILE SURAT (PDF / GAMBAR) --}}
+    {{-- ================================================================= --}}
+    
+    @if($surat->file_surat)
+        @php
+            $path = storage_path('app/public/' . $surat->file_surat);
+            $extension = pathinfo($path, PATHINFO_EXTENSION);
+        @endphp
+
+        <div class="page-break"></div> {{-- Pindah Halaman --}}
+        
+        <div class="header" style="margin-top: 30px;">
+            <h3>LAMPIRAN SURAT</h3>
+        </div>
+
+        <div class="lampiran-container">
+            @if(in_array(strtolower($extension), ['jpg', 'jpeg', 'png']))
+                {{-- JIKA GAMBAR: TAMPILKAN LANGSUNG --}}
+                <img src="{{ $path }}" class="lampiran-img" alt="Lampiran Surat">
+            
+            @elseif(strtolower($extension) == 'pdf')
+                {{-- JIKA PDF: TAMPILKAN INFO --}}
+                <div class="lampiran-note">
+                    <h3>Lampiran Berupa Dokumen PDF</h3>
+                    <p>File surat ini adalah dokumen PDF.</p>
+                    <p>
+                        Mohon unduh file asli untuk melihat isinya secara lengkap.<br>
+                        (Dompdf tidak dapat menampilkan file PDF di dalam PDF lain secara otomatis)
+                    </p>
+                    <br>
+                    <p><strong>Nama File:</strong> {{ basename($surat->file_surat) }}</p>
+                </div>
+            @endif
+        </div>
+    @endif
 
 </body>
 </html>

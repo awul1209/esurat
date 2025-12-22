@@ -11,7 +11,7 @@
 @endpush
 
 @section('content')
-<div class="container-fluid px-4">
+<div class="container-fluid px-3">
 
     {{-- Alert Success/Error --}}
     @if (session('success'))
@@ -21,7 +21,7 @@
         </div>
     @endif
 
-    <div class="card shadow-sm border-0 mb-4 mt-4">
+    <div class="card shadow-sm border-0 mb-4 mt-2">
         <div class="card-header py-3 bg-white border-bottom d-flex justify-content-between align-items-center">
             <h6 class="m-0 fw-bold text-primary">
                 <i class="bi bi-arrow-down-left-square-fill me-2"></i>Daftar Surat Masuk Internal (Dari Satker)
@@ -132,9 +132,26 @@
 <script src="https://cdn.datatables.net/v/bs5/dt-2.1.0/datatables.min.js"></script>
 <script>
     $(document).ready(function() {
-        // Init DataTable
+        // Init DataTable dengan Bahasa Indonesia (Hardcoded Object)
         $('#tabelSuratInternal').DataTable({
-            language: { url: "//cdn.datatables.net/plug-ins/1.13.4/i18n/id.json" },
+            // HAPUS bagian 'url' dan ganti dengan object di bawah ini
+            language: {
+                "emptyTable": "Tidak ada data yang tersedia pada tabel ini",
+                "info": "Menampilkan _START_ sampai _END_ dari _TOTAL_ entri",
+                "infoEmpty": "Menampilkan 0 sampai 0 dari 0 entri",
+                "infoFiltered": "(disaring dari _MAX_ total entri)",
+                "lengthMenu": "Tampilkan _MENU_ entri",
+                "loadingRecords": "Sedang memuat...",
+                "processing": "Sedang memproses...",
+                "search": "Cari:",
+                "zeroRecords": "Tidak ditemukan data yang sesuai",
+                "paginate": {
+                    "first": "Pertama",
+                    "last": "Terakhir",
+                    "next": "Selanjutnya",
+                    "previous": "Sebelumnya"
+                }
+            },
             order: [[ 3, 'desc' ]] // Urut tanggal diterima terbaru
         });
 

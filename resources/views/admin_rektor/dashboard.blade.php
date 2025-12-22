@@ -1,130 +1,194 @@
 @extends('layouts.app')
 
 @push('styles')
+{{-- FullCalendar CSS --}}
+<link href='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/main.min.css' rel='stylesheet' />
+<script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js'></script>
+
 <style>
-    /* Style Kartu KPI */
-    .border-left-primary { border-left: 0.25rem solid #4e73df !important; }
-    .border-left-success { border-left: 0.25rem solid #1cc88a !important; }
-    .border-left-info    { border-left: 0.25rem solid #36b9cc !important; }
-    .text-xs { font-size: .7rem; }
-    .text-gray-300 { color: #dddfeb !important; }
-    .text-gray-800 { color: #5a5c69 !important; }
-    .fw-bold { font-weight: 700 !important; }
-    .h5 { font-size: 1.25rem; }
+    /* Style Card KPI */
+    .border-left-primary { border-left: .25rem solid #4e73df !important; }
+    .border-left-warning { border-left: .25rem solid #f6c23e !important; }
+    .border-left-success { border-left: .25rem solid #1cc88a !important; }
+    .border-left-info    { border-left: .25rem solid #36b9cc !important; }
     
-    /* Chart Container */
-    .chart-area { position: relative; height: 250px; width: 100%; }
-    .chart-pie { position: relative; height: 195px; width: 100%; }
+    .text-xs { font-size: .75rem; }
+    .fw-bold { font-weight: 700 !important; }
+    .text-gray-800 { color: #5a5c69 !important; }
+
+    /* Calendar Fix */
+    #calendar { max-height: 250px; font-size: 0.65rem; }
+    .fc-toolbar-title { font-size: 0.7rem !important; font-weight: bold; }
+    .fc-button { font-size: 0.65rem !important; }
+    .fc-event { cursor: pointer; }
 </style>
 @endpush
 
 @section('content')
-<div class="container-fluid px-4">
+<div class="container-fluid px-3">
 
-    {{-- BAGIAN 1: KARTU KPI --}}
-    <div class="row">
-        <div class="col-xl-4 col-md-6 mb-4">
+    {{-- BAGIAN 1: 4 KARTU KPI --}}
+    <div class="row mt-2">
+        
+        {{-- Card 1: Surat Masuk Hari Ini --}}
+        <div class="col-xl-3 col-md-6 mb-4">
             <div class="card border-left-primary shadow h-100 py-2">
                 <div class="card-body">
                     <div class="row no-gutters align-items-center">
                         <div class="col mr-2">
-                            <div class="text-xs fw-bold text-primary text-uppercase mb-1">Menunggu Disposisi</div>
-                            <div class="h5 mb-0 fw-bold text-gray-800">{{ $perluDisposisi }} Surat</div>
+                            <div class="text-xs fw-bold text-primary text-uppercase mb-1">
+                                Masuk (Hari Ini)</div>
+                            <div class="h5 mb-0 fw-bold text-gray-800">{{ $suratMasukHariIni }}</div>
                         </div>
-                        <div class="col-auto"><i class="bi bi-hourglass-split text-gray-300" style="font-size: 2rem;"></i></div>
+                        <div class="col-auto">
+                            <i class="bi bi-inbox-fill h2 text-gray-300"></i>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
-        <div class="col-xl-4 col-md-6 mb-4">
+
+        {{-- Card 2: Perlu Disposisi Hari Ini --}}
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-warning shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs fw-bold text-warning text-uppercase mb-1">
+                                Perlu Disposisi (Hari Ini)</div>
+                            <div class="h5 mb-0 fw-bold text-gray-800">{{ $perluDisposisiHariIni }}</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="bi bi-exclamation-circle-fill h2 text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {{-- Card 3: Sudah Disposisi / Ditangani --}}
+        <div class="col-xl-3 col-md-6 mb-4">
             <div class="card border-left-success shadow h-100 py-2">
                 <div class="card-body">
                     <div class="row no-gutters align-items-center">
                         <div class="col mr-2">
-                            <div class="text-xs fw-bold text-success text-uppercase mb-1">Selesai Didisposisi</div>
-                            <div class="h5 mb-0 fw-bold text-gray-800">{{ $sudahDisposisi }} Surat</div>
+                            <div class="text-xs fw-bold text-success text-uppercase mb-1">
+                                Total Ditangani</div>
+                            <div class="h5 mb-0 fw-bold text-gray-800">{{ $sudahDisposisi }}</div>
                         </div>
-                        <div class="col-auto"><i class="bi bi-check-circle-fill text-gray-300" style="font-size: 2rem;"></i></div>
+                        <div class="col-auto">
+                            <i class="bi bi-check-all h2 text-gray-300"></i>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
-        <div class="col-xl-4 col-md-6 mb-4">
+
+        {{-- Card 4: Surat Keluar Hari Ini --}}
+        <div class="col-xl-3 col-md-6 mb-4">
             <div class="card border-left-info shadow h-100 py-2">
                 <div class="card-body">
                     <div class="row no-gutters align-items-center">
                         <div class="col mr-2">
-                            <div class="text-xs fw-bold text-info text-uppercase mb-1">Total Ditangani</div>
-                            <div class="h5 mb-0 fw-bold text-gray-800">{{ $totalDiterima }} Surat</div>
+                            <div class="text-xs fw-bold text-info text-uppercase mb-1">
+                                Surat Keluar (Hari Ini)</div>
+                            <div class="h5 mb-0 fw-bold text-gray-800">{{ $suratKeluarHariIni }}</div>
                         </div>
-                        <div class="col-auto"><i class="bi bi-folder2-open text-gray-300" style="font-size: 2rem;"></i></div>
+                        <div class="col-auto">
+                            <i class="bi bi-send-fill h2 text-gray-300"></i>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
 
-    {{-- BAGIAN 2: CHARTS --}}
+    {{-- BAGIAN 2: CHARTS UTAMA --}}
     <div class="row">
+        {{-- Line Chart --}}
         <div class="col-xl-8 col-lg-7">
-            <div class="card shadow mb-4">
-                <div class="card-header py-3"><h6 class="m-0 fw-bold text-primary">Tren Surat Masuk (7 Hari Terakhir)</h6></div>
+            <div class="card shadow mb-4 border-0">
+                <div class="card-header py-3 bg-white border-bottom-0">
+                    <h6 class="m-0 fw-bold text-primary">Tren Surat Masuk (7 Hari Terakhir)</h6>
+                </div>
                 <div class="card-body">
-                    <div class="chart-area">
+                    <div class="chart-area" style="height: 205px;">
                         <canvas id="trenSuratChart"></canvas>
                     </div>
                 </div>
             </div>
         </div>
+        
+        {{-- Pie Chart --}}
         <div class="col-xl-4 col-lg-5">
-            <div class="card shadow mb-4">
-                <div class="card-header py-3"><h6 class="m-0 fw-bold text-primary">Komposisi Surat (Internal vs Eksternal)</h6></div>
+            <div class="card shadow mb-4 border-0">
+                <div class="card-header py-3 bg-white border-bottom-0">
+                    <h6 class="m-0 fw-bold text-primary">Komposisi Surat</h6>
+                </div>
                 <div class="card-body">
-                    <div class="chart-pie pt-2 pb-2">
+                    <div class="chart-pie pt-2 pb-2" style="height: 205px;">
                         <canvas id="komposisiSuratChart"></canvas>
-                    </div>
-                    <div class="mt-3 text-center small text-muted">
-                        *Data berdasarkan surat yang sudah diterima Rektor
                     </div>
                 </div>
             </div>
         </div>
     </div>
 
-    {{-- BAGIAN 3: TABEL TINDAKAN CEPAT --}}
+    {{-- BAGIAN 3: AGENDA & KALENDER (Arsip Rektor) --}}
     <div class="row">
-        <div class="col-12">
-            <div class="card shadow mb-4">
-                <div class="card-header py-3"><h6 class="m-0 fw-bold text-primary">Tindakan Cepat (Surat Baru Masuk)</h6></div>
+        {{-- Agenda Chart --}}
+        <div class="col-xl-8 col-lg-7">
+            <div class="card shadow mb-4 border-0">
+                <div class="card-header py-3 bg-white border-bottom-0 d-flex justify-content-between">
+                    <h6 class="m-0 fw-bold text-primary">
+                        <i class="bi bi-bar-chart-line-fill me-1"></i> Agenda / Arsip Rektor Mendatang
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="chart-area" style="height: 250px;">
+                        <canvas id="agendaChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {{-- Kalender --}}
+        <div class="col-xl-4 col-lg-5">
+            <div class="card shadow mb-4 border-0">
+                <div class="card-header py-3 bg-white border-bottom-0">
+                    <h6 class="m-0 fw-bold text-primary">
+                        <i class="bi bi-calendar-check me-1"></i> Kalender Arsip Rektor
+                    </h6>
+                </div>
                 <div class="card-body">
                     <div class="table-responsive">
-                        <table class="table table-bordered table-hover" width="100%" cellspacing="0" style="font-size: 14px;">
-                            <thead class="table-light">
-                                <tr>
-                                    <th>No Agenda</th><th>Asal Surat</th><th>Perihal</th><th>Tanggal Diterima</th><th class="text-center">Aksi</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @forelse($suratBaru as $surat)
-                                <tr>
-                                    <td>{{ $surat->no_agenda }}</td>
-                                    <td>{{ $surat->surat_dari }}</td>
-                                    <td>{{ $surat->perihal }}</td>
-                                    <td>{{ \Carbon\Carbon::parse($surat->diterima_tanggal)->isoFormat('D MMMM YYYY') }}</td>
-                                    <td class="text-center">
-                                        <a href="{{ route('adminrektor.disposisi.show', $surat->id) }}" class="btn btn-primary btn-sm shadow-sm"><i class="bi bi-pencil-square"></i> Proses</a>
-                                    </td>
-                                </tr>
-                                @empty
-                                <tr><td colspan="5" class="text-center py-3 text-muted">Tidak ada surat baru yang perlu didisposisi.</td></tr>
-                                @endforelse
-                            </tbody>
-                        </table>
+                         <div id='calendar'></div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
+
+    {{-- MODAL DETAIL KALENDER --}}
+    <div class="modal fade" id="calendarModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content border-0 shadow">
+                <div class="modal-header bg-primary text-white border-0">
+                    <h6 class="modal-title fw-bold">
+                        <i class="bi bi-calendar2-week me-2"></i>Detail Agenda: <span id="modalDate"></span>
+                    </h6>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body bg-light p-3">
+                    <div id="calendarList"></div>
+                </div>
+                <div class="modal-footer bg-white border-top-0 py-2">
+                    <button type="button" class="btn btn-secondary btn-sm px-4 rounded-pill" data-bs-dismiss="modal">Tutup</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
 </div>
 @endsection
 
@@ -138,12 +202,13 @@
     const lineData = @json($lineData);
     const pieLabels = @json($pieLabels);
     const pieData = @json($pieData);
+    const agendaLabels = @json($agendaLabels);
+    const agendaValues = @json($agendaValues);
+    const calendarEvents = @json($calendarEvents);
 
-    Chart.defaults.font.family = 'Nunito';
-    Chart.defaults.color = '#858796';
-
-    $(document).ready(function() {
-        // 1. LINE CHART (TREN)
+    document.addEventListener('DOMContentLoaded', function() {
+        
+        // 1. LINE CHART (Tren)
         const ctxLine = document.getElementById("trenSuratChart");
         if (ctxLine) {
             new Chart(ctxLine, {
@@ -158,37 +223,22 @@
                         pointRadius: 3,
                         pointBackgroundColor: "rgba(78, 115, 223, 1)",
                         pointBorderColor: "rgba(78, 115, 223, 1)",
-                        pointHoverRadius: 3,
-                        pointHoverBackgroundColor: "rgba(78, 115, 223, 1)",
-                        pointHoverBorderColor: "rgba(78, 115, 223, 1)",
-                        pointHitRadius: 10,
-                        pointBorderWidth: 2,
                         data: lineData,
                     }],
                 },
                 options: {
                     maintainAspectRatio: false,
-                    layout: { padding: { left: 10, right: 25, top: 25, bottom: 0 } },
+                    responsive: true,
+                    plugins: { legend: { display: false } },
                     scales: {
-                        x: { grid: { display: false, drawBorder: false }, ticks: { maxTicksLimit: 7 } },
-                        y: {
-                            min: 0, // MULAI DARI 0
-                            ticks: {
-                                maxTicksLimit: 5,
-                                padding: 10,
-                                stepSize: 1, // KELIPATAN 1 (Bulat)
-                                precision: 0, // HINDARI DESIMAL
-                                callback: function(value) { if (value % 1 === 0) { return value; } }
-                            },
-                            grid: { color: "rgb(234, 236, 244)", zeroLineColor: "rgb(234, 236, 244)", drawBorder: false, borderDash: [2], zeroLineBorderDash: [2] }
-                        },
-                    },
-                    plugins: { legend: { display: false } }
+                        x: { grid: { display: false }, ticks: { maxTicksLimit: 7 } },
+                        y: { ticks: { precision: 0 }, beginAtZero: true }
+                    }
                 }
             });
         }
 
-        // 2. PIE CHART (KOMPOSISI)
+        // 2. PIE CHART (Komposisi)
         const ctxPie = document.getElementById("komposisiSuratChart");
         if (ctxPie) {
             new Chart(ctxPie, {
@@ -197,17 +247,119 @@
                     labels: pieLabels,
                     datasets: [{
                         data: pieData,
-                        backgroundColor: ['#4e73df', '#1cc88a', '#36b9cc'],
-                        hoverBackgroundColor: ['#2e59d9', '#17a673', '#2c9faf'],
+                        backgroundColor: ['#4e73df', '#f6c23e', '#36b9cc'],
+                        hoverBackgroundColor: ['#2e59d9', '#f6c23e', '#2c9faf'],
                         hoverBorderColor: "rgba(234, 236, 244, 1)",
                     }],
                 },
                 options: {
                     maintainAspectRatio: false,
+                    responsive: true,
                     plugins: { legend: { display: true, position: 'bottom' } },
-                    cutout: '70%',
+                    cutout: '50%',
                 },
             });
+        }
+
+        // 3. AGENDA CHART (Bar Chart)
+        const ctxAgenda = document.getElementById('agendaChart');
+        if (ctxAgenda) {
+            new Chart(ctxAgenda, {
+                type: 'bar',
+                data: {
+                    labels: agendaLabels.length > 0 ? agendaLabels : ['Tidak ada agenda'],
+                    datasets: [{
+                        label: "Jumlah Kegiatan",
+                        backgroundColor: "#4e73df",
+                        hoverBackgroundColor: "#1730d3ff",
+                        borderColor: "#4e73df",
+                        data: agendaValues.length > 0 ? agendaValues : [0],
+                        barPercentage: 0.5,
+                    }],
+                },
+                options: {
+                    maintainAspectRatio: false,
+                    responsive: true,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { grid: { display: false } },
+                        y: { ticks: { precision: 0 }, beginAtZero: true }
+                    }
+                }
+            });
+        }
+
+        // 4. FULLCALENDAR
+        var calendarEl = document.getElementById('calendar');
+        if (calendarEl) {
+            var calendar = new FullCalendar.Calendar(calendarEl, {
+                initialView: 'dayGridMonth',
+                locale: 'id',
+                contentHeight: 'auto',
+                headerToolbar: {
+                    left: 'prev,next today',
+                    center: 'title',
+                    right: '' 
+                },
+                buttonText: { today: 'Hari Ini' },
+                events: calendarEvents,
+                eventDidMount: function(info) {
+                    info.el.title = "Klik detail";
+                },
+                eventClick: function(info) {
+                    info.jsEvent.preventDefault();
+                    
+                    var clickedDateStr = info.event.startStr;
+                    var dateObj = new Date(clickedDateStr);
+                    var options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+                    var formattedDate = dateObj.toLocaleDateString('id-ID', options);
+
+                    var allEvents = calendar.getEvents();
+                    var eventsOnDay = allEvents.filter(function(evt) {
+                        return evt.startStr === clickedDateStr;
+                    });
+
+                    var listHtml = '';
+                    if (eventsOnDay.length > 0) {
+                        eventsOnDay.forEach(function(evt) {
+                            var props = evt.extendedProps;
+                            var isInternal = (props.tipe === 'Internal');
+                            var badgeClass = isInternal ? 'bg-primary bg-gradient' : 'bg-warning bg-gradient text-dark';
+                            var borderClass = isInternal ? 'border-primary' : 'border-warning';
+                            var iconColor   = isInternal ? 'text-primary' : 'text-warning text-dark';
+
+                            listHtml += `
+                                <div class="card mb-3 shadow-sm border-0 border-start border-4 ${borderClass}">
+                                    <div class="card-body p-3">
+                                        <div class="d-flex justify-content-between align-items-start mb-2">
+                                            <span class="badge ${badgeClass} rounded-pill px-3 py-2" style="font-size: 0.8rem;">${props.tipe}</span>
+                                            <div class="text-end">
+                                                <small class="text-muted d-block" style="font-size: 0.7rem;">No. Surat:</small>
+                                                <span class="fw-bold text-dark small">${props.nomor_surat}</span>
+                                            </div>
+                                        </div>
+                                        <h6 class="fw-bold text-dark mb-2" style="font-size: 0.95rem;">${props.perihal_full}</h6>
+                                        <div class="d-flex align-items-center bg-light border rounded p-2">
+                                            <i class="bi bi-building fs-5 ${iconColor} me-2"></i>
+                                            <div>
+                                                <small class="text-muted d-block" style="font-size: 0.7rem;">Pengirim:</small>
+                                                <strong class="text-dark small">${props.pengirim}</strong>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            `;
+                        });
+                    } else {
+                        listHtml = '<div class="p-3 text-center text-muted">Tidak ada agenda.</div>';
+                    }
+
+                    $('#modalDate').text(formattedDate);
+                    $('#calendarList').html(listHtml);
+                    $('#calendarModal').modal('show');
+                }
+            });
+            calendar.render();
         }
     });
 </script>

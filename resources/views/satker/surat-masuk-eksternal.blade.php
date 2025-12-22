@@ -3,7 +3,7 @@
 @push('styles')
 <link href="https://cdn.datatables.net/v/bs5/dt-2.1.0/datatables.min.css" rel="stylesheet">
 <style>
-    /* CSS 13px agar konsisten */
+    /* CSS Penyesuaian */
     #tabelSuratUnified, .dataTables_wrapper, .modal-body { font-size: 13px !important; }
     .dataTables_wrapper .dataTables_paginate .page-link { font-size: 0.85rem !important; padding: 0.3rem 0.6rem !important; }
     
@@ -22,46 +22,107 @@
     .form-check {
         margin-bottom: 0.25rem;
     }
+    
+    /* Tombol Aksi */
+    .btn-group-xs > .btn, .btn-sm {
+        padding: .25rem .4rem;
+        font-size: .875rem;
+        line-height: 1.5;
+        border-radius: .2rem;
+    }
 </style>
 @endpush
 
 @section('content')
-<div class="container-fluid px-4">
+<div class="container-fluid px-3">
 
+    {{-- ALERT NOTIFIKASI --}}
     @if (session('success'))
-        <div class="alert alert-success alert-dismissible fade show" role="alert" style="font-size: 13px;">
+        <div class="alert alert-success alert-dismissible fade show mt-3" role="alert" style="font-size: 13px;">
             <i class="bi bi-check-circle-fill me-2"></i> {{ session('success') }}
             <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
         </div>
     @endif
 
     @if (session('error'))
-        <div class="alert alert-danger alert-dismissible fade show" role="alert" style="font-size: 13px;">
+        <div class="alert alert-danger alert-dismissible fade show mt-3" role="alert" style="font-size: 13px;">
             <i class="bi bi-exclamation-triangle-fill me-2"></i> {{ session('error') }}
             <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
         </div>
     @endif
 
-    <div class="card shadow-sm border-0 mb-4">
-        {{-- HEADER DENGAN TOMBOL TAMBAH --}}
-        <div class="card-header py-3 bg-light border-0 d-flex justify-content-between align-items-center">
-            <h6 class="m-0 fw-bold text-primary">Daftar Semua Surat Masuk Eksternal</h6>
-            
-            {{-- TOMBOL TAMBAH DATA (Input Manual Satker) --}}
-            <button class="btn btn-primary btn-sm shadow-sm" data-bs-toggle="modal" data-bs-target="#tambahSuratModal">
-                <i class="bi bi-plus-lg me-1"></i> Input Surat Manual
-            </button>
+    {{-- CARD UTAMA: FILTER & TABEL --}}
+    <div class="card shadow-sm border-0 mb-4 mt-2">
+        
+        {{-- HEADER KARTU --}}
+        <div class="card-header bg-white border-bottom py-3">
+            <h6 class="m-0 fw-bold text-primary"><i class="bi bi-inbox-fill me-2"></i>Daftar Surat Masuk Eksternal</h6>
         </div>
 
-        <div class="card-body">
+        {{-- BAGIAN FILTER & TOMBOL --}}
+        <div class="card-body bg-light border-bottom py-3">
+            <form action="{{ route('satker.surat-masuk.eksternal') }}" method="GET">
+                <div class="row g-2 align-items-end">
+                    
+                    {{-- Input Tanggal Awal --}}
+                    <div class="col-md-3 col-sm-6">
+                        <label class="form-label small fw-bold text-muted mb-1">Dari Tanggal (Diterima)</label>
+                        <div class="input-group input-group-sm">
+                            <span class="input-group-text bg-white"><i class="bi bi-calendar"></i></span>
+                            <input type="date" name="start_date" class="form-control" value="{{ request('start_date') }}">
+                        </div>
+                    </div>
+
+                    {{-- Input Tanggal Akhir --}}
+                    <div class="col-md-3 col-sm-6">
+                        <label class="form-label small fw-bold text-muted mb-1">Sampai Tanggal</label>
+                        <div class="input-group input-group-sm">
+                            <span class="input-group-text bg-white"><i class="bi bi-calendar-fill"></i></span>
+                            <input type="date" name="end_date" class="form-control" value="{{ request('end_date') }}">
+                        </div>
+                    </div>
+
+                    {{-- Tombol Filter & Reset --}}
+                    <div class="col-md-auto">
+                        <div class="d-flex gap-2">
+                            <button type="submit" class="btn btn-primary btn-sm" title="Cari Data">
+                                <i class="bi bi-search me-1"></i> Cari
+                            </button>
+                            <a href="{{ route('satker.surat-masuk.eksternal') }}" class="btn btn-outline-secondary btn-sm" title="Reset Filter">
+                                <i class="bi bi-arrow-counterclockwise"></i> Reset
+                            </a>
+                        </div>
+                    </div>
+
+                    {{-- AREA KANAN: EXPORT & INPUT MANUAL --}}
+                    <div class="col-md ms-auto text-md-end mt-2 mt-md-0">
+                        <div class="d-flex gap-2 justify-content-md-end">
+                            {{-- Tombol Export Excel --}}
+                            <a href="{{ route('satker.surat-masuk.eksternal.export', request()->query()) }}" class="btn btn-success btn-sm shadow-sm">
+                                <i class="bi bi-file-earmark-excel-fill me-1"></i> Export Excel
+                            </a>
+                            
+                            {{-- Tombol Input Manual --}}
+                            <button type="button" class="btn btn-primary btn-sm shadow-sm" data-bs-toggle="modal" data-bs-target="#tambahSuratModal">
+                                <i class="bi bi-plus-lg me-1"></i> Input Surat Manual
+                            </button>
+                        </div>
+                    </div>
+
+                </div>
+            </form>
+        </div>
+
+        {{-- BAGIAN TABEL --}}
+        <div class="card-body p-0">
             <div class="table-responsive">
-                <table id="tabelSuratUnified" class="table table-hover align-middle table-sm">
+                <table id="tabelSuratUnified" class="table table-hover align-middle table-sm w-100 mb-0">
                     <thead class="table-light">
                         <tr>
-                            <th scope="col" class="text-center">No</th>
+                            <th scope="col" class="text-center py-3">No</th>
                             <th scope="col">Asal Surat</th>
                             <th scope="col">Perihal</th>
-                            <th scope="col">Tgl. Diterima</th>
+                            <th scope="col">Tgl. Surat</th>
                             <th scope="col">Jalur Penerimaan</th>
                             <th scope="col">Status / Posisi</th>
                             <th scope="col" class="text-center">Aksi</th>
@@ -69,30 +130,30 @@
                     </thead>
                     <tbody>
                         @php
-                            // Menggabungkan Surat Disposisi dan Surat Edaran
+                            // Logika Penggabungan Data (Sama seperti Controller)
                             $allSurat = $suratMasukSatker->merge($suratEdaran)->unique('id')->sortByDesc('diterima_tanggal');
                             $mySatkerId = Auth::user()->satker_id;
-                            $myUserId = Auth::id(); // ID User Login
+                            $myUserId = Auth::id();
                         @endphp
 
                         @foreach ($allSurat as $index => $surat)
                             @php
                                 $isEdaran = isset($surat->pivot);
                                 
-                                // LOGIKA 1: Apakah surat ini inputan saya sendiri?
+                                // Cek kepemilikan inputan
                                 $isMyInput = ($surat->user_id == $myUserId);
 
-                                // FILTER TAMPILAN (Status)
+                                // Filter Tampilan Status
                                 $statusBolehDilihat = ['di_satker', 'arsip_satker', 'disimpan', 'selesai', 'selesai_edaran'];
                                 if (!$isEdaran && !in_array($surat->status, $statusBolehDilihat)) { continue; }
 
-                                // LOGIKA JALUR
+                                // Logika Jalur & Disposisi
                                 $myDisposisi = $surat->disposisis->where('tujuan_satker_id', $mySatkerId)->first();
                                 $isDirectToMe = ($surat->tujuan_satker_id == $mySatkerId);
                                 
                                 $catatanRektor = $myDisposisi ? $myDisposisi->catatan_rektor : ($surat->disposisis->last()->catatan_rektor ?? '-');
 
-                                // LOGIKA DELEGASI
+                                // Logika Delegasi
                                 $myDelegations = $surat->delegasiPegawai->filter(function($pegawai) use ($mySatkerId) {
                                     return $pegawai->satker_id == $mySatkerId;
                                 });
@@ -101,7 +162,7 @@
                                 $lastMyDelegation = $myDelegations->sortByDesc('pivot.created_at')->first();
                                 $catatanSatker = $lastMyDelegation ? ($lastMyDelegation->pivot->catatan ?? '-') : '-';
 
-                                // LOGIKA STATUS & TOMBOL
+                                // Logika Status Badge
                                 $isProcessed = false;
                                 $statusBadge = '';
                                 
@@ -130,22 +191,21 @@
                             @endphp
                             
                             <tr>
-                                <td class="text-center">{{ $loop->iteration }}</td>
+                                <td class="text-center fw-bold">{{ $loop->iteration }}</td>
 
                                 <td>
                                     {{ $surat->surat_dari }}
                                     <br><small class="text-muted">{{ $surat->nomor_surat }}</small>
                                     @if($isEdaran) <br><span class="badge bg-info text-dark">Edaran</span> @endif
                                 </td>
-                                <td>{{ $surat->perihal }}</td>
-                                <td>{{ $surat->diterima_tanggal->isoFormat('D MMM YYYY') }}</td>
+                                <td>{{ Str::limit($surat->perihal, 50) }}</td>
+                                <td>{{ $surat->tanggal_surat->format('d/m/Y') }}</td>
                                 
-                                {{-- KOLOM JALUR PENERIMAAN --}}
+                                {{-- Jalur Penerimaan --}}
                                 <td>
                                     @if ($myDisposisi)
                                         <span class="text-primary fw-bold">Disposisi Rektor</span>
                                     @elseif ($isMyInput)
-                                        {{-- Tanda Input Manual --}}
                                         <span class="text-info fw-bold"><i class="bi bi-keyboard"></i> Input Manual</span>
                                     @elseif ($isDirectToMe)
                                         <span class="text-success fw-bold">Langsung dari BAU</span>
@@ -159,8 +219,8 @@
                                 <td class="text-center">
                                     <div class="d-flex justify-content-center gap-1">
                                         
-                                        {{-- TOMBOL LIHAT (Semua Bisa Lihat) --}}
-                                        <button type="button" class="btn btn-sm btn-info" 
+                                        {{-- TOMBOL LIHAT --}}
+                                        <button type="button" class="btn btn-sm btn-info text-white" 
                                             title="Lihat Detail"
                                             data-bs-toggle="modal" 
                                             data-bs-target="#detailSuratModal"
@@ -178,7 +238,6 @@
 
                                         {{-- JIKA INPUTAN SENDIRI: Show Edit & Hapus --}}
                                         @if($isMyInput)
-                                            {{-- EDIT --}}
                                             <button class="btn btn-sm btn-warning text-white" 
                                                     data-bs-toggle="modal" 
                                                     data-bs-target="#editSuratModal{{ $surat->id }}"
@@ -186,7 +245,6 @@
                                                 <i class="bi bi-pencil-fill"></i>
                                             </button>
 
-                                            {{-- HAPUS --}}
                                             <form action="{{ route('satker.surat.destroy', $surat->id) }}" method="POST" onsubmit="return confirm('Yakin hapus surat manual ini?');">
                                                 @csrf @method('DELETE')
                                                 <button type="submit" class="btn btn-sm btn-danger" title="Hapus Data">
@@ -195,8 +253,7 @@
                                             </form>
                                         @endif
 
-                                        {{-- ACTION LANJUTAN (Delegasi/Selesai) --}}
-                                        {{-- Tetap dimunculkan agar Input Manual pun bisa diproses (Didelegasikan/Diarsipkan) --}}
+                                        {{-- ACTION LANJUTAN --}}
                                         @if(!$isProcessed)
                                             <button class="btn btn-sm btn-primary" title="Delegasi" data-bs-toggle="modal" data-bs-target="#delegasiModal" data-id="{{ $surat->id }}" data-perihal="{{ $surat->perihal }}">
                                                 <i class="bi bi-person-fill-add"></i>
@@ -204,16 +261,16 @@
                                             
                                             @if($isEdaran)
                                                 <form action="{{ route('satker.surat.broadcastInternal', $surat->id) }}" method="POST" onsubmit="return confirm('Sebarkan?');">
-                                                    @csrf <button type="submit" class="btn btn-sm btn-success"><i class="bi bi-people-fill"></i></button>
+                                                    @csrf <button type="submit" class="btn btn-sm btn-success" title="Sebarkan"><i class="bi bi-people-fill"></i></button>
                                                 </form>
                                             @else
                                                 <form action="{{ route('satker.surat.arsipkan', $surat->id) }}" method="POST" onsubmit="return confirm('Arsipkan?');">
-                                                    @csrf <button type="submit" class="btn btn-sm btn-secondary" title="Selesai"><i class="bi bi-clipboard-check-fill"></i></button>
+                                                    @csrf <button type="submit" class="btn btn-sm btn-secondary" title="Selesai/Arsipkan"><i class="bi bi-clipboard-check-fill"></i></button>
                                                 </form>
                                             @endif
                                         @endif
                                         
-                                        {{-- TOMBOL CETAK (HANYA Jika Disposisi Rektor) --}}
+                                        {{-- TOMBOL CETAK --}}
                                         @if($isProcessed && $myDisposisi && !$isMyInput)
                                             <a href="{{ route('cetak.disposisi', $surat->id) }}" target="_blank" class="btn btn-sm btn-outline-danger" title="Cetak Lembar Disposisi">
                                                 <i class="bi bi-printer-fill"></i>
@@ -223,7 +280,7 @@
                                 </td>
                             </tr>
 
-                            {{-- MODAL EDIT (Looping inside loop) --}}
+                            {{-- MODAL EDIT (Dalam Loop agar ID Unik) --}}
                             @if($isMyInput)
                             <div class="modal fade" id="editSuratModal{{ $surat->id }}" tabindex="-1">
                                 <div class="modal-dialog">
@@ -261,9 +318,9 @@
     </div>
 </div>
 
-{{-- MODAL TAMBAH SURAT MANUAL (PLUS DELEGASI) --}}
+{{-- MODAL TAMBAH SURAT MANUAL --}}
 <div class="modal fade" id="tambahSuratModal" tabindex="-1">
-    <div class="modal-dialog modal-lg"> {{-- Pakai modal-lg agar lebih lebar --}}
+    <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <form action="{{ route('satker.surat.store') }}" method="POST" enctype="multipart/form-data">
                 @csrf
@@ -272,10 +329,7 @@
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
-                    
-                    {{-- BAGIAN 1: DATA SURAT --}}
                     <h6 class="fw-bold text-primary border-bottom pb-2 mb-3">Data Surat</h6>
-                    
                     <div class="row">
                         <div class="col-md-6 mb-3">
                             <label>Nomor Surat <span class="text-danger">*</span></label>
@@ -286,12 +340,10 @@
                             <input type="text" name="surat_dari" class="form-control" placeholder="Instansi Pengirim" required>
                         </div>
                     </div>
-
                     <div class="mb-3">
                         <label>Perihal <span class="text-danger">*</span></label>
                         <input type="text" name="perihal" class="form-control" required>
                     </div>
-
                     <div class="row">
                         <div class="col-md-4 mb-3">
                             <label>Tgl Surat</label>
@@ -306,36 +358,30 @@
                             <input type="file" name="file_surat" class="form-control" accept=".pdf,.jpg,.png" required>
                         </div>
                     </div>
-
-                    {{-- BAGIAN 2: DELEGASI (OPSIONAL) --}}
+                    
                     <h6 class="fw-bold text-success border-bottom pb-2 mt-4 mb-3">
                         Delegasi ke Pegawai <small class="text-muted fw-normal">(Opsional)</small>
                     </h6>
-
                     <div class="mb-3">
                         <label class="form-label">Pilih Pegawai:</label>
-                        <div class="checklist-container" style="max-height: 150px; overflow-y: auto; border: 1px solid #ced4da; padding: 10px; border-radius: 5px;">
+                        <div class="checklist-container">
                             @if($daftarPegawai->isEmpty())
                                 <p class="text-muted text-center small my-1">Tidak ada pegawai terdaftar.</p>
                             @else
                                 @foreach ($daftarPegawai as $pegawai)
                                     <div class="form-check">
                                         <input class="form-check-input" type="checkbox" name="delegasi_user_ids[]" value="{{ $pegawai->id }}" id="input_pegawai_{{ $pegawai->id }}">
-                                        <label class="form-check-label" for="input_pegawai_{{ $pegawai->id }}">
-                                            {{ $pegawai->name }}
-                                        </label>
+                                        <label class="form-check-label" for="input_pegawai_{{ $pegawai->id }}">{{ $pegawai->name }}</label>
                                     </div>
                                 @endforeach
                             @endif
                         </div>
                         <div class="form-text text-muted small">Jika dikosongkan, surat hanya tersimpan di arsip Satker.</div>
                     </div>
-
                     <div class="mb-3">
                         <label>Catatan Delegasi:</label>
                         <textarea name="catatan_delegasi" class="form-control" rows="2" placeholder="Contoh: Segera tindak lanjuti..."></textarea>
                     </div>
-
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
@@ -346,7 +392,7 @@
     </div>
 </div>
 
-{{-- MODAL 1: DETAIL SURAT --}}
+{{-- MODAL DETAIL SURAT --}}
 <div class="modal fade" id="detailSuratModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-xl">
         <div class="modal-content">
@@ -357,7 +403,7 @@
             <div class="modal-body">
                 <div class="row">
                     <div class="col-md-5">
-                        <h4 class="mb-3" id="modal-perihal"></h4>
+                        <h4 class="mb-3 fw-bold" id="modal-perihal"></h4>
                         <table class="table table-borderless table-sm small">
                            <tr><td class="info-modal-label">No. Agenda</td><td class="info-modal-data">: <span id="modal-no-agenda"></span></td></tr>
                            <tr><td class="info-modal-label">Nomor Surat</td><td class="info-modal-data">: <span id="modal-nomor-surat"></span></td></tr>
@@ -387,7 +433,7 @@
     </div>
 </div>
 
-{{-- MODAL 2: DELEGASI --}}
+{{-- MODAL DELEGASI --}}
 <div class="modal fade" id="delegasiModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content">
@@ -438,22 +484,22 @@
 <script src="https://cdn.datatables.net/v/bs5/dt-2.1.0/datatables.min.js"></script>
 <script>
     $(document).ready(function () {
+        // Init DataTable
         new DataTable('#tabelSuratUnified', {
             pagingType: 'simple_numbers',
-            order: [[ 3, 'desc' ]],
+            ordering: false, // Matikan sorting default agar logika sort controller terjaga
             language: {
-                search: "Cari:", lengthMenu: "_MENU_",
+                search: "Cari:", lengthMenu: "Tampilkan _MENU_ data",
                 info: "Menampilkan _START_ sampai _END_ dari _TOTAL_ data",
                 infoEmpty: "Menampilkan 0 data",
                 paginate: { next: "Next", previous: "Prev" }
             }
         });
 
-        // Detail Modal
+        // Script Modal Detail
         var detailModal = document.getElementById('detailSuratModal');
         detailModal.addEventListener('show.bs.modal', function (event) {
             var button = event.relatedTarget;
-            // Set Data
             detailModal.querySelector('#modal-perihal').textContent = button.getAttribute('data-perihal');
             detailModal.querySelector('#modal-no-agenda').textContent = button.getAttribute('data-no-agenda') || '-';
             detailModal.querySelector('#modal-nomor-surat').textContent = button.getAttribute('data-nomor-surat');
@@ -465,7 +511,7 @@
             detailModal.querySelector('#modal-catatan-rektor').textContent = (catatanRektor && catatanRektor !== '-') ? catatanRektor : '(Tidak ada)';
             
             var catatanSatker = button.getAttribute('data-catatan-satker');
-            detailModal.querySelector('#modal-catatan-satker').textContent = catatanSatker;
+            detailModal.querySelector('#modal-catatan-satker').textContent = (catatanSatker && catatanSatker !== '-') ? catatanSatker : '-';
 
             var fileUrl = button.getAttribute('data-file-url');
             detailModal.querySelector('#modal-download-button').href = fileUrl;
@@ -485,7 +531,7 @@
             }
         });
 
-        // Delegasi Modal
+        // Script Modal Delegasi
         var delegasiModal = document.getElementById('delegasiModal');
         delegasiModal.addEventListener('show.bs.modal', function (event) {
             var button = event.relatedTarget;

@@ -14,7 +14,7 @@
 @endpush
 
 @section('content')
-<div class="container-fluid px-4">
+<div class="container-fluid px-3">
 
     @if (session('success'))
         <div class="alert alert-success alert-dismissible fade show" role="alert">

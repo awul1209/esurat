@@ -1,8 +1,6 @@
 @extends('layouts.app')
 
 @push('styles')
-<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" />
 <style>
     .form-label { font-weight: 600; font-size: 0.9rem; color: #495057; }
     .card-header { background: linear-gradient(45deg, #f8f9fa, #e9ecef); }
@@ -27,6 +25,9 @@
         padding: 10px;
         margin-bottom: 10px;
         font-size: 0.9rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
     }
 </style>
 @endpush
@@ -38,7 +39,7 @@
             <div class="card shadow border-0 rounded-3">
                 <div class="card-header py-3 border-bottom d-flex align-items-center">
                     <i class="bi bi-pencil-square text-warning me-2 fs-5"></i>
-                    <h6 class="m-0 fw-bold text-primary">Edit Surat Keluar Internal</h6>
+                    <h6 class="m-0 fw-bold text-primary">Edit Surat Keluar Eksternal</h6>
                 </div>
                 
                 <div class="card-body p-4">
@@ -50,7 +51,7 @@
                         </div>
                     @endif
 
-                    <form action="{{ route('satker.surat-keluar.internal.update', $surat->id) }}" method="POST" enctype="multipart/form-data">
+                    <form action="{{ route('satker.surat-keluar.eksternal.update', $surat->id) }}" method="POST" enctype="multipart/form-data">
                         @csrf
                         @method('PUT') 
                         
@@ -75,54 +76,40 @@
                             </div>
                         </div>
 
-                        {{-- Baris 2: Tujuan & Perihal --}}
-                        <div class="row g-3 mb-3">
-                            <div class="col-md-6">
-                                <label class="form-label">Tujuan Surat <span class="text-danger">*</span></label>
-                                <select name="tujuan_satker_ids[]" class="form-select select2 @error('tujuan_satker_ids') is-invalid @enderror" multiple="multiple" required>
-                                    
-                                    {{-- Cek apakah tujuan lama adalah Universitas/Rektor --}}
-                                    @php
-                                        $tujuanLama = collect($selectedSatkerIds); 
-                                        $isRektor = !empty($surat->tujuan_surat); 
-                                    @endphp
-
-                                    <optgroup label="Pimpinan (Via BAU)">
-                                        <option value="universitas" {{ $isRektor ? 'selected' : '' }}>Rektor / Universitas</option>
-                                    </optgroup>
-
-                                    <optgroup label="Satuan Kerja (Langsung)">
-                                        @foreach($daftarSatker as $satker)
-                                            <option value="{{ $satker->id }}" 
-                                                {{ $tujuanLama->contains($satker->id) ? 'selected' : '' }}>
-                                                {{ $satker->nama_satker }}
-                                            </option>
-                                        @endforeach
-                                    </optgroup>
-                                </select>
-                                @error('tujuan_satker_ids') <div class="text-danger small mt-1">{{ $message }}</div> @enderror
+                        {{-- Baris 2: Tujuan Luar (Manual Input) --}}
+                        <div class="mb-3">
+                            <label class="form-label">Tujuan Surat (Pihak Luar) <span class="text-danger">*</span></label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-light"><i class="bi bi-building"></i></span>
+                                <input type="text" name="tujuan_luar" 
+                                       class="form-control @error('tujuan_luar') is-invalid @enderror" 
+                                       value="{{ old('tujuan_luar', $surat->tujuan_luar) }}" required>
+                                @error('tujuan_luar') <div class="invalid-feedback">{{ $message }}</div> @enderror
                             </div>
-
-                            <div class="col-md-6">
-                                <label class="form-label">Perihal <span class="text-danger">*</span></label>
-                                <textarea name="perihal" class="form-control @error('perihal') is-invalid @enderror" rows="1" style="height: 38px;" required>{{ old('perihal', $surat->perihal) }}</textarea>
-                                @error('perihal') <div class="invalid-feedback">{{ $message }}</div> @enderror
-                            </div>
+                            <div class="form-text text-muted small"><i class="bi bi-info-circle me-1"></i> Ubah nama instansi atau tujuan jika diperlukan.</div>
                         </div>
 
-                        {{-- Baris 3: File Upload & Preview --}}
+                        {{-- Baris 3: Perihal --}}
+                        <div class="mb-3">
+                            <label class="form-label">Perihal <span class="text-danger">*</span></label>
+                            <textarea name="perihal" class="form-control @error('perihal') is-invalid @enderror" rows="2" required>{{ old('perihal', $surat->perihal) }}</textarea>
+                            @error('perihal') <div class="invalid-feedback">{{ $message }}</div> @enderror
+                        </div>
+
+                        {{-- Baris 4: File Upload & Preview --}}
                         <div class="mb-4">
                             <label class="form-label">File Surat</label>
                             
-                            {{-- Info File Saat Ini (MODAL TRIGGER) --}}
+                            {{-- Info File Saat Ini (Trigger Modal) --}}
                             @if($surat->file_surat)
-                                <div class="current-file-box d-flex justify-content-between align-items-center">
+                                <div class="current-file-box">
                                     <span>
                                         <i class="bi bi-file-earmark-check text-success me-2"></i> 
                                         File saat ini: <strong>Tersedia</strong>
                                     </span>
-                                    {{-- TOMBOL INI MEMICU MODAL --}}
-                                    <button type="button" class="btn btn-sm btn-outline-primary" 
+                                    
+                                    {{-- TOMBOL PEMICU MODAL --}}
+                                    <button type="button" class="btn btn-sm btn-outline-primary shadow-sm" 
                                             data-bs-toggle="modal" 
                                             data-bs-target="#existingFileModal"
                                             data-file-url="{{ asset('storage/' . $surat->file_surat) }}">
@@ -134,7 +121,7 @@
                             <input type="file" name="file_surat" id="fileInput" 
                                    class="form-control @error('file_surat') is-invalid @enderror" 
                                    accept=".pdf,.jpg,.jpeg,.png" onchange="previewNewFile()">
-                            <div class="form-text text-muted">Upload file baru HANYA jika ingin mengganti file lama. (Max: 5MB)</div>
+                            <div class="form-text text-muted">Upload file baru HANYA jika ingin mengganti file lama. (Max: 10MB)</div>
                             @error('file_surat') <div class="invalid-feedback">{{ $message }}</div> @enderror
 
                             {{-- Area Preview File Baru --}}
@@ -151,7 +138,7 @@
                         
                         {{-- Tombol Aksi --}}
                         <div class="d-flex justify-content-between pt-3 border-top">
-                            <a href="{{ route('satker.surat-keluar.internal') }}" class="btn btn-outline-secondary px-4">
+                            <a href="{{ route('satker.surat-keluar.eksternal.index') }}" class="btn btn-outline-secondary px-4">
                                 <i class="bi bi-arrow-left me-1"></i> Batal
                             </a>
                             <button type="submit" class="btn btn-warning text-white px-4 shadow-sm">
@@ -171,7 +158,7 @@
     <div class="modal-dialog modal-xl">
         <div class="modal-content">
             <div class="modal-header bg-light">
-                <h5 class="modal-title fw-bold">Preview File Lama</h5>
+                <h5 class="modal-title fw-bold text-dark">Preview File Lama</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body p-0 bg-secondary bg-opacity-10">
@@ -195,19 +182,11 @@
 
 @push('scripts')
 <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 <script>
     $(document).ready(function() {
-        // Init Select2
-        $('.select2').select2({
-            theme: 'bootstrap-5',
-            placeholder: 'Pilih Tujuan...',
-            allowClear: true,
-            width: '100%'
-        });
-
         // --- LOGIKA MODAL PREVIEW FILE LAMA ---
         var existingFileModal = document.getElementById('existingFileModal');
+        
         existingFileModal.addEventListener('show.bs.modal', function (event) {
             var button = event.relatedTarget;
             var fileUrl = button.getAttribute('data-file-url');
@@ -215,7 +194,10 @@
             var container = existingFileModal.querySelector('#existing-file-viewer');
             var downloadBtn = existingFileModal.querySelector('#btn-download-existing');
 
+            // Set link download
             downloadBtn.href = fileUrl;
+            
+            // Tampilkan Loading
             container.innerHTML = '<div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div>';
 
             if(fileUrl) {
@@ -277,8 +259,8 @@
         const fileInput = document.getElementById('fileInput');
         const previewContainer = document.getElementById('preview-container');
         
-        fileInput.value = ''; 
-        previewContainer.style.display = 'none'; 
+        fileInput.value = ''; // Reset input
+        previewContainer.style.display = 'none'; // Sembunyikan preview
     }
 </script>
 @endpush

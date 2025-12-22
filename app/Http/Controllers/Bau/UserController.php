@@ -70,39 +70,40 @@ class UserController extends Controller
     /**
      * Mengupdate data user di database.
      */
-   public function update(Request $request, User $manajemen_user)
-    {
-        $user = $manajemen_user;
+  public function update(Request $request, User $manajemen_user)
+{
+    $user = $manajemen_user;
 
-        // 1. Validasi
-        $validated = $request->validate([
-            'name' => 'required|string|max:255',
-            'email' => [
-                'required', 'string', 'email', 'max:255',
-                Rule::unique('users')->ignore($user->id),
-            ],
-            'no_hp' => 'nullable|string|max:20', // <--- TAMBAHAN BARU
-            'password' => 'nullable|string|min:8|confirmed',
-            'role' => 'required|in:bau,admin_rektor,satker,pegawai',
-            'satker_id' => 'nullable|exists:satkers,id',
-        ]);
+    // 1. Validasi
+    $validated = $request->validate([
+        'name' => 'required|string|max:255',
+        'email' => [
+            'required', 'string', 'email', 'max:255',
+            Rule::unique('users')->ignore($user->id),
+        ],
+        // PERBAIKAN: Ubah max:20 jadi max:255 agar muat banyak nomor
+        'no_hp' => 'nullable|string|max:255', 
+        'password' => 'nullable|string|min:8|confirmed',
+        'role' => 'required|in:bau,admin_rektor,satker,pegawai',
+        'satker_id' => 'nullable|exists:satkers,id',
+    ]);
 
-        // 2. Update data dasar
-        $user->name = $validated['name'];
-        $user->email = $validated['email'];
-        $user->no_hp = $validated['no_hp']; // <--- UPDATE NO HP
-        $user->role = $validated['role'];
-        $user->satker_id = $validated['satker_id'];
+    // 2. Update data dasar
+    $user->name = $validated['name'];
+    $user->email = $validated['email'];
+    $user->no_hp = $validated['no_hp']; 
+    $user->role = $validated['role'];
+    $user->satker_id = $validated['satker_id'];
 
-        // 3. Cek jika password diisi
-        if ($request->filled('password')) {
-            $user->password = Hash::make($validated['password']);
-        }
-
-        $user->save();
-
-        return redirect()->route('bau.manajemen-user.index')->with('success', 'Data user berhasil diperbarui.');
+    // 3. Cek jika password diisi
+    if ($request->filled('password')) {
+        $user->password = Hash::make($validated['password']);
     }
+
+    $user->save();
+
+    return redirect()->route('bau.manajemen-user.index')->with('success', 'Data user berhasil diperbarui.');
+}
 
     /**
      * Menghapus user dari database.

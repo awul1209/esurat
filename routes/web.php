@@ -117,15 +117,43 @@ Route::middleware(['auth', 'role:bau'])->prefix('bau')->name('bau.')->group(func
     
     // Hapus (Hasil akhir: bau.inbox.destroy)
     Route::delete('/inbox/{id}', [BauSuratController::class, 'destroyInbox'])->name('inbox.destroy');
+
+   Route::post('/surat/check-duplicate', [App\Http\Controllers\Bau\SuratController::class, 'checkDuplicate'])
+        ->name('surat.checkDuplicate');
+    
+    Route::post('/surat-keluar/check-duplicate', [App\Http\Controllers\Bau\SuratKeluarController::class, 'checkDuplicate'])
+    ->name('surat-keluar.checkDuplicate');
+
+Route::get('/riwayat/export', [App\Http\Controllers\Bau\SuratController::class, 'exportRiwayatExcel'])
+        ->name('riwayat.export');
+    
+// TAMBAHKAN BARIS INI:
+    Route::get('/surat-keluar/export', [App\Http\Controllers\Bau\SuratKeluarController::class, 'exportExcel'])
+        ->name('surat-keluar.export');
+
+
+Route::get('/inbox/export', [App\Http\Controllers\Bau\SuratController::class, 'exportInbox'])
+        ->name('inbox.export');
+    
 });
 
     // --- GRUP UNTUK ADMIN REKTOR ---
     Route::prefix('admin-rektor')->name('adminrektor.')->group(function () {
         Route::get('/surat-masuk', [AdminRektorSuratMasukController::class, 'index'])
             ->name('suratmasuk.index');
+           
         Route::get('/disposisi/{surat}', [DisposisiController::class, 'show'])->name('disposisi.show');
         Route::post('/disposisi/{surat}', [DisposisiController::class, 'store'])->name('disposisi.store');
         Route::get('/riwayat-disposisi', [DisposisiController::class, 'riwayat'])->name('disposisi.riwayat');
+        // Route Export Excel (Tambahkan ini)
+Route::get('/riwayat-disposisi/export', [DisposisiController::class, 'exportRiwayat'])->name('adminrektor.riwayat.export');
+// 1. Route Export (Gunakan nama 'disposisi.riwayat.export' agar prefix adminrektor tersambung rapi)
+    Route::get('/riwayat-disposisi/export', [DisposisiController::class, 'exportRiwayat'])
+        ->name('disposisi.riwayat.export');
+
+    // 2. Route Detail Timeline (WAJIB ADA untuk Modal Riwayat)
+    Route::get('/riwayat-disposisi/detail/{id}', [DisposisiController::class, 'detail'])
+        ->name('disposisi.riwayat.detail');
         Route::get('/surat-keluar', [AdminRektorSuratKeluarController::class, 'index'])->name('suratkeluar.index');
         Route::get('/surat-keluar/create', [AdminRektorSuratKeluarController::class, 'create'])->name('suratkeluar.create');
 
@@ -136,12 +164,27 @@ Route::middleware(['auth', 'role:bau'])->prefix('bau')->name('bau.')->group(func
     // 2. Route Surat Keluar Internal
     // (Anda perlu membuat method indexInternal di SuratKeluarController)
     Route::get('/surat-keluar-internal', [App\Http\Controllers\AdminRektor\SuratKeluarController::class, 'indexInternal'])->name('suratkeluar.internal');
+
+    // surat keluar
+    // Surat Keluar Internal
+    Route::resource('surat-keluar-internal', App\Http\Controllers\AdminRektor\SuratKeluarInternalController::class);
+    Route::get('surat-keluar-internal-export', [App\Http\Controllers\AdminRektor\SuratKeluarInternalController::class, 'export'])->name('surat-keluar-internal.export');
+
+    // Surat Keluar Eksternal
+    Route::resource('surat-keluar-eksternal', App\Http\Controllers\AdminRektor\SuratKeluarEksternalController::class);
+    Route::get('surat-keluar-eksternal-export', [App\Http\Controllers\AdminRektor\SuratKeluarEksternalController::class, 'export'])->name('surat-keluar-eksternal.export');
     });
 
     // --- GRUP UNTUK ADMIN SATKER ---
-   Route::prefix('satker')->name('satker.')->middleware(['auth', 'role:satker'])->group(function () {
+  Route::prefix('satker')->name('satker.')->middleware(['auth', 'role:satker'])->group(function () {
+
+    // --- SURAT KELUAR INTERNAL (Export ditaruh sebelum CRUD) ---
+    Route::get('/surat-keluar-internal/export', [App\Http\Controllers\Satker\SuratInternalController::class, 'exportKeluar'])
+        ->name('surat-keluar.internal.export');
 
     // --- SURAT MASUK EKSTERNAL ---
+    Route::get('/surat-masuk-eksternal/export', [App\Http\Controllers\Satker\SuratController::class, 'exportMasukEksternal'])
+        ->name('surat-masuk.eksternal.export');
     Route::get('/surat-masuk-eksternal', [App\Http\Controllers\Satker\SuratController::class, 'indexMasukEksternal'])
         ->name('surat-masuk.eksternal');
     
@@ -160,8 +203,21 @@ Route::middleware(['auth', 'role:bau'])->prefix('bau')->name('bau.')->group(func
 
 
     // --- SURAT MASUK INTERNAL ---
+    // 1. Tambahkan Rute Export INI (Letakkan SEBELUM indexMasuk)
+    Route::get('/surat-masuk-internal/export', [App\Http\Controllers\Satker\SuratInternalController::class, 'exportMasuk'])
+        ->name('surat-masuk.internal.export');
     Route::get('/surat-masuk-internal', [App\Http\Controllers\Satker\SuratInternalController::class, 'indexMasuk'])
         ->name('surat-masuk.internal');
+    
+    // CRUD SURAT MASUK INTERNAL MANUAL
+    Route::post('/surat-masuk-internal/store', [App\Http\Controllers\Satker\SuratInternalController::class, 'storeMasukManual'])
+        ->name('surat-masuk.internal.store'); // Nama route ini dipanggil di form modal
+
+    Route::put('/surat-masuk-internal/{id}', [App\Http\Controllers\Satker\SuratInternalController::class, 'updateMasukManual'])
+        ->name('surat-masuk.internal.update');
+
+    Route::delete('/surat-masuk-internal/{id}', [App\Http\Controllers\Satker\SuratInternalController::class, 'destroyMasukManual'])
+        ->name('surat-masuk.internal.destroy');
     
 
     // --- SURAT KELUAR INTERNAL ---
@@ -179,20 +235,22 @@ Route::middleware(['auth', 'role:bau'])->prefix('bau')->name('bau.')->group(func
         ->name('surat-keluar.internal.destroy');
 
 
-    // --- SURAT KELUAR EKSTERNAL (YANG DIPERBAIKI) ---
-    // Hapus 'satker.' di key 'as', karena sudah mewarisi dari grup induk
+    // --- SURAT KELUAR EKSTERNAL ---
+    // Grup ini otomatis prefix: satker/surat-keluar/eksternal
+    // Grup ini otomatis nama: satker.surat-keluar.eksternal.
     Route::group(['prefix' => 'surat-keluar/eksternal', 'as' => 'surat-keluar.eksternal.'], function () {
         
+        // PERBAIKAN: Route Export dipindah ke sini agar namanya menjadi 'satker.surat-keluar.eksternal.export'
+        Route::get('/export', [App\Http\Controllers\Satker\SuratKeluarEksternalController::class, 'export'])->name('export');
+
         Route::get('/', [App\Http\Controllers\Satker\SuratKeluarEksternalController::class, 'index'])->name('index');
         Route::get('/create', [App\Http\Controllers\Satker\SuratKeluarEksternalController::class, 'create'])->name('create');
         Route::post('/', [App\Http\Controllers\Satker\SuratKeluarEksternalController::class, 'store'])->name('store');
         
-        // Perbaiki parameter binding agar sesuai controller ({surat})
         Route::get('/{surat}/edit', [App\Http\Controllers\Satker\SuratKeluarEksternalController::class, 'edit'])->name('edit');
         Route::put('/{surat}', [App\Http\Controllers\Satker\SuratKeluarEksternalController::class, 'update'])->name('update');
         Route::delete('/{surat}', [App\Http\Controllers\Satker\SuratKeluarEksternalController::class, 'destroy'])->name('destroy');
     });
-
 });
 
     // --- GRUP UNTUK PEGAWAI ---
