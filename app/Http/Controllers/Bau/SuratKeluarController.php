@@ -17,6 +17,8 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\DB;   
 use Illuminate\Validation\Rule;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Validator;
 
 class SuratKeluarController extends Controller
 {
@@ -64,21 +66,29 @@ public function indexEksternal(Request $request)
 
 public function exportExcel(Request $request)
 {
-    $tipe = $request->input('type'); // 'internal' atau 'eksternal'
+    // 1. Ambil Input (Jangan di-strtolower dulu, biarkan sesuai input view)
+    $tipe = $request->input('type'); 
     $startDate = $request->input('start_date');
     $endDate = $request->input('end_date');
 
-    // Query sesuai Tipe
-    $query = SuratKeluar::where('tipe_kirim', $tipe)->with('penerimaInternal');
+    // 2. Query Dasar (Seperti Kode Awal Anda)
+    $query = \App\Models\SuratKeluar::with('penerimaInternal')
+                ->where('tipe_kirim', $tipe);
 
-    // Filter Tanggal
+    // 3. LOGIKA FIX: Hanya filter User ID jika tipenya INTERNAL
+    // Alasannya: Internal sering "bocor" data satker lain, sedangkan Eksternal (menurut Anda) sudah aman.
+    if (strtolower($tipe) == 'internal') {
+        $query->where('user_id', \Illuminate\Support\Facades\Auth::id());
+    }
+
+    // 4. Filter Tanggal
     if ($startDate && $endDate) {
         $query->whereBetween('tanggal_surat', [$startDate, $endDate]);
     }
 
     $data = $query->latest()->get();
 
-    // Generate CSV
+    // 5. Generate CSV
     $filename = "Surat_Keluar_" . ucfirst($tipe) . "_" . date('Ymd_His') . ".csv";
     
     $headers = [
@@ -93,14 +103,19 @@ public function exportExcel(Request $request)
 
     $callback = function() use($data, $columns) {
         $file = fopen('php://output', 'w');
-        fputcsv($file, $columns); // Header
+        fputcsv($file, $columns); 
 
         foreach ($data as $index => $item) {
             
-            // Siapkan Text Tujuan
+            // Logika Tujuan
             $tujuanText = $item->tujuan_surat;
-            if (empty($tujuanText) && $item->penerimaInternal->count() > 0) {
-                $tujuanText = $item->penerimaInternal->pluck('nama_satker')->implode(', ');
+            
+            if (empty($tujuanText)) {
+                if ($item->penerimaInternal->count() > 0) {
+                    $tujuanText = $item->penerimaInternal->pluck('nama_satker')->implode(', ');
+                } else {
+                    $tujuanText = '-';
+                }
             }
 
             $link = $item->file_surat ? asset('storage/' . $item->file_surat) : '-';
@@ -132,45 +147,33 @@ public function exportExcel(Request $request)
     /**
      * Store + Notif WA (FORMAT DIPERBAIKI)
      */
-  public function store(Request $request)
+ public function store(Request $request)
     {
-        // 1. Validasi dengan Pesan Bahasa Indonesia
-        $validator = \Illuminate\Support\Facades\Validator::make($request->all(), [
+        // 1. Validasi
+        $validator = Validator::make($request->all(), [
             'nomor_surat'   => 'required|unique:surat_keluars,nomor_surat',
             'perihal'       => 'required',
             'tanggal_surat' => 'required|date',
-            'file_surat'    => 'required|file|mimes:pdf,jpg,jpeg,png|max:5120', // 5MB
-        ], [
-            'nomor_surat.required'   => 'Nomor surat wajib diisi.',
-            'nomor_surat.unique'     => 'Nomor surat ini sudah terdaftar di database.',
-            'perihal.required'       => 'Perihal surat wajib diisi.',
-            'tanggal_surat.required' => 'Tanggal surat wajib diisi.',
-            'file_surat.required'    => 'File surat wajib diupload.',
-            'file_surat.mimes'       => 'Format file harus berupa: PDF, JPG, JPEG, atau PNG.',
-            'file_surat.max'         => 'Ukuran file terlalu besar (Maksimal 5MB).',
+            'file_surat'    => 'required|file|mimes:pdf,jpg,jpeg,png|max:5120', 
         ]);
 
         if ($validator->fails()) {
-            return redirect()->back()
-                ->withErrors($validator)
-                ->withInput(); 
+            return redirect()->back()->withErrors($validator)->withInput(); 
         }
 
         $user = Auth::user();
         $path = $request->file('file_surat')->store('surat-keluar', 'public');
+        
+        $suratKeluar = null;
 
-        DB::transaction(function() use ($request, $user, $path) {
+        DB::transaction(function() use ($request, $user, $path, &$suratKeluar) {
             
-            // =================================================================
-            // A. PILAH TUJUAN (FIX: CEK TIPE DULU AGAR TIDAK EROR SAAT EKSTERNAL)
-            // =================================================================
+            // A. PILAH TUJUAN
             $satkerIds = [];     
             $targetRektor = [];  
 
             if ($request->tipe_kirim == 'internal') {
-                // Ambil dari dropdown multi-select (tambahkan ?? [] agar aman jika kosong)
                 $inputTujuan = $request->tujuan_satker_ids ?? [];
-                
                 foreach($inputTujuan as $val) {
                     if ($val == 'rektor' || $val == 'universitas') {
                         $targetRektor[] = $val;
@@ -180,20 +183,10 @@ public function exportExcel(Request $request)
                 }
             }
 
-            // =================================================================
-            // B. SIMPAN ARSIP SURAT KELUAR
-            // =================================================================
+            // B. SIMPAN SURAT KELUAR
             $displayTujuan = [];
-
-            // 1. Text Internal (Rektor/Univ)
-            if (!empty($targetRektor)) {
-                $displayTujuan[] = implode(' & ', array_map('ucfirst', $targetRektor));
-            }
-            
-            // 2. Text Eksternal (Ambil dari input text biasa)
-            if ($request->tipe_kirim == 'eksternal' && $request->tujuan_luar) {
-                $displayTujuan[] = $request->tujuan_luar;
-            }
+            if (!empty($targetRektor)) $displayTujuan[] = implode(' & ', array_map('ucfirst', $targetRektor));
+            if ($request->tipe_kirim == 'eksternal' && $request->tujuan_luar) $displayTujuan[] = $request->tujuan_luar;
             
             $suratKeluar = SuratKeluar::create([
                 'user_id'          => $user->id,
@@ -206,27 +199,34 @@ public function exportExcel(Request $request)
                 'file_surat'       => $path,
             ]);
 
-            // Data Umum untuk Notifikasi
+            // Data Umum Notifikasi
             $tglSurat = \Carbon\Carbon::parse($request->tanggal_surat)->format('d-m-Y');
             $link = route('login');
-            $namaPengirim = "Biro Administrasi Umum (BAU)"; 
+            // Jika user punya satker, pakai nama satker. Jika tidak (misal superadmin), pakai nama user.
+            $namaPengirim = $user->satker->nama_satker ?? "Biro Administrasi Umum (BAU)"; 
 
             // =================================================================
-            // SKENARIO 1: KIRIM KE SATKER LAIN (BAU -> SATKER)
+            // SKENARIO 1: KIRIM KE SATKER LAIN (Logika Samakan dengan Satker)
             // =================================================================
             if (!empty($satkerIds)) {
                 $suratKeluar->penerimaInternal()->attach($satkerIds);
 
-                // KIRIM NOTIFIKASI WA
                 try {
-                    $penerimaSatkers = User::with('satker')
-                                           ->whereIn('satker_id', $satkerIds)
-                                           ->where('role', 'satker')
-                                           ->get();
+                    // 1. Role yang boleh menerima notif (SAMAKAN dengan Satker)
+                    $rolePenerima = ['satker', 'bau', 'bapsi', 'admin'];
 
-                    foreach ($penerimaSatkers as $penerima) {
+                    // 2. Ambil User Satker Tujuan
+                    $penerimaNotif = User::whereIn('satker_id', $satkerIds)
+                                         ->whereIn('role', $rolePenerima)
+                                         ->get();
+
+                    foreach ($penerimaNotif as $penerima) {
                         if ($penerima->no_hp) {
+                            
+                            // 3. LOGIKA SPLIT NOMOR HP (SAMAKAN dengan Satker)
+                            $daftarNomor = explode(',', $penerima->no_hp);
                             $namaTujuan = $penerima->satker->nama_satker ?? 'Satker Tujuan';
+
                             $pesan = 
 "📩 *Notifikasi Surat Masuk Baru*
 
@@ -236,25 +236,29 @@ No. Surat     : {$request->nomor_surat}
 Perihal       : {$request->perihal}
 Pengirim      : {$namaPengirim}
 
-Silakan cek dan tindak lanjuti surat tersebut melalui sistem e-Surat.
-Detail surat: {$link}
+Silakan cek sistem e-Surat: {$link}";
 
-Pesan ini dikirim otomatis oleh Sistem e-Surat.";
-                            
-                            WaService::send($penerima->no_hp, $pesan);
+                            // 4. Loop kirim ke setiap nomor
+                            foreach ($daftarNomor as $nomor) {
+                                $nomorBersih = trim($nomor);
+                                $nomorBersih = preg_replace('/[^0-9]/', '', $nomorBersih); 
+
+                                if(!empty($nomorBersih)) {
+                                    // PANGGIL HELPER WA SERVICE
+                                    WaService::send($nomorBersih, $pesan);
+                                }
+                            }
                         }
                     }
-                } catch (\Exception $e) {}
+                } catch (\Exception $e) { /* Silent Error */ }
             }
 
             // =================================================================
-            // SKENARIO 2: KIRIM KE REKTOR (BAU -> REKTOR)
+            // SKENARIO 2: KIRIM KE REKTOR
             // =================================================================
             foreach ($targetRektor as $target) {
-                
                 $tujuanTipe = ($target == 'universitas') ? 'universitas' : 'rektor';
-                $statusSurat = 'di_admin_rektor'; 
-
+                
                 $suratMasuk = Surat::create([
                     'surat_dari'       => $namaPengirim, 
                     'tipe_surat'       => 'internal', 
@@ -265,7 +269,7 @@ Pesan ini dikirim otomatis oleh Sistem e-Surat.";
                     'diterima_tanggal' => now(),
                     'sifat'            => 'Biasa',
                     'file_surat'       => $path,
-                    'status'           => $statusSurat,
+                    'status'           => 'di_admin_rektor',
                     'user_id'          => $user->id, 
                     'tujuan_tipe'      => $tujuanTipe,
                     'tujuan_satker_id' => null,
@@ -279,11 +283,14 @@ Pesan ini dikirim otomatis oleh Sistem e-Surat.";
                     'catatan'     => 'Surat Internal dari BAU, langsung masuk ke Admin Rektor.'
                 ]);
 
-                // NOTIFIKASI WA KE ADMIN REKTOR
+                // Notif ke Admin Rektor
                 try {
-                    $adminRektor = User::where('role', 'admin_rektor')->first();
-                    if ($adminRektor && $adminRektor->no_hp) {
-                        $pesan = 
+                    $adminRektors = User::where('role', 'admin_rektor')->get();
+                    foreach($adminRektors as $admin) {
+                        if ($admin->no_hp) {
+                            $daftarNomor = explode(',', $admin->no_hp);
+                            
+                            $pesan = 
 "📩 *Notifikasi Surat Masuk Baru*
 
 Satker Tujuan : Rektor / Universitas
@@ -292,25 +299,26 @@ No. Surat     : {$request->nomor_surat}
 Perihal       : {$request->perihal}
 Pengirim      : {$namaPengirim}
 
-Silakan cek dan tindak lanjuti surat tersebut melalui sistem e-Surat.
-Detail surat: {$link}
+Silakan cek sistem e-Surat: {$link}";
 
-Pesan ini dikirim otomatis oleh Sistem e-Surat.";
-                        
-                        WaService::send($adminRektor->no_hp, $pesan);
+                            foreach ($daftarNomor as $nomor) {
+                                $nomorBersih = trim($nomor);
+                                $nomorBersih = preg_replace('/[^0-9]/', '', $nomorBersih);
+                                if(!empty($nomorBersih)) {
+                                    WaService::send($nomorBersih, $pesan);
+                                }
+                            }
+                        }
                     }
                 } catch (\Exception $e) {}
             }
         });
 
-// --- PERBAIKAN DI SINI (REDIRECT DINAMIS) ---
-    $routeTujuan = ($suratKeluar->tipe_kirim == 'internal') 
-        ? 'bau.surat-keluar.internal' 
-        : 'bau.surat-keluar.eksternal';
-
-    return redirect()->route($routeTujuan)
-        ->with('success', 'Data surat keluar berhasil diperbarui.');
+        $routeTujuan = ($suratKeluar->tipe_kirim == 'internal') ? 'bau.surat-keluar.internal' : 'bau.surat-keluar.eksternal';
+        return redirect()->route($routeTujuan)->with('success', 'Data surat keluar berhasil diperbarui.');
     }
+
+
 
     public function edit(SuratKeluar $suratKeluar)
     {

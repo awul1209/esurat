@@ -12,6 +12,7 @@ use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Auth;
+use setasign\Fpdi\Fpdi;
 
 // --- IMPORT PENTING ---
 use App\Services\WaService;
@@ -340,34 +341,68 @@ public function checkDuplicate(Request $request)
     /**
      * Menampilkan Halaman Disposisi
      */
-    public function showDisposisi()
+ public function showRiwayat(Request $request) 
     {
-        $suratDisposisi = Surat::with('disposisis.tujuanSatker', 'disposisis.klasifikasi')
-                            ->whereIn('status', ['didisposisi', 'menunggu_tindak_lanjut', 'selesai_disposisi', 'disposisi', 'disposisi_rektor', 'sudah_disposisi'])
-                            ->latest('diterima_tanggal')
-                            ->get(); 
-        return view('bau.disposisi_index', compact('suratDisposisi'));
+        // 1. Ambil Input Filter
+        $startDate = $request->input('start_date');
+        $endDate   = $request->input('end_date');
+        $tipeSurat = $request->input('tipe_surat');
+
+        // 2. Query Dasar (DISAMAKAN DENGAN ADMIN REKTOR)
+        $query = \App\Models\Surat::with(['disposisis.tujuanSatker', 'tujuanSatker', 'tujuanUser'])
+            // Filter: Hanya surat untuk Rektor/Univ
+            ->whereIn('tujuan_tipe', ['rektor', 'universitas'])
+            // Filter: Hanya status yang menunjukkan surat SUDAH diteruskan
+            ->whereIn('status', [
+                'didisposisi',      // Sedang OTW ke Satker
+                'di_satker',        // Sudah diterima Satker
+                'arsip_satker',     // Sudah diselesaikan Satker
+                'diarsipkan',     // Surat yang kusus lainnya/ormawa
+                'selesai_edaran'    // Edaran selesai
+            ]);
+
+        // 3. Filter Tanggal
+        if ($startDate && $endDate) {
+            $query->whereBetween('tanggal_surat', [$startDate, $endDate]);
+        }
+
+        // 4. Filter Tipe Surat
+        if ($tipeSurat && $tipeSurat != 'semua') {
+            $query->where('tipe_surat', $tipeSurat);
+        }
+
+        // 5. Eksekusi
+        $suratSelesai = $query->latest('diterima_tanggal')->get();
+        
+        return view('bau.riwayat_index', compact('suratSelesai', 'startDate', 'endDate', 'tipeSurat'));
     }
 
     /**
-     * Menampilkan Riwayat
+     * Export Excel Riwayat Terusan
      */
- public function showRiwayat(Request $request) 
+   public function exportRiwayatExcel(Request $request)
 {
     $user = Auth::user();
     $bauSatkerId = $user->satker_id;
-
+    
     // 1. Ambil Input
     $startDate = $request->input('start_date');
     $endDate = $request->input('end_date');
-    $tipeSurat = $request->input('tipe_surat'); // <--- TAMBAHAN BARU
+    $tipeSurat = $request->input('tipe_surat'); 
 
-    // 2. Query Dasar
+    // 2. Query
     $query = \App\Models\Surat::with(['disposisis.tujuanSatker', 'user'])
+        // --- PERBAIKAN FILTER STATUS ---
+        // Hanya ambil status proses disposisi.
+        // Status 'selesai', 'diarsipkan', 'disimpan' DIHAPUS (karena masuk Arsip Rektor)
         ->whereIn('status', [
-            'selesai', 'selesai_edaran', 'diarsipkan', 'disimpan', 
-            'arsip_satker', 'di_satker',
+            'didisposisi', 
+            'di_satker', 
+            'arsip_satker', 
+            'diarsipkan', 
+            'selesai_edaran'
         ])
+        // --- LOGIKA QUERY ANDA SEBELUMNYA (DIPERTAHANKAN) ---
         ->where(function($q) use ($bauSatkerId) {
             $q->where('tujuan_satker_id', '!=', $bauSatkerId)
               ->orWhereNull('tujuan_satker_id');
@@ -380,64 +415,20 @@ public function checkDuplicate(Request $request)
               });
         });
 
-    // 3. FILTER TANGGAL
+    // 3. Filter Tanggal
     if ($startDate && $endDate) {
         $query->whereBetween('tanggal_surat', [$startDate, $endDate]);
     }
 
-    // 4. FILTER TIPE SURAT (BARU)
-    if ($tipeSurat && $tipeSurat != 'semua') {
-        $query->where('tipe_surat', $tipeSurat);
-    }
-
-    // 5. Eksekusi
-    $suratSelesai = $query->latest('diterima_tanggal')->get();
-    
-    return view('bau.riwayat_index', compact('suratSelesai', 'startDate', 'endDate', 'tipeSurat'));
-}
-
-public function exportRiwayatExcel(Request $request)
-{
-    $user = Auth::user();
-    $bauSatkerId = $user->satker_id;
-    
-    // Ambil Input
-    $startDate = $request->input('start_date');
-    $endDate = $request->input('end_date');
-    $tipeSurat = $request->input('tipe_surat'); // <--- TAMBAHAN BARU
-
-    // Query (Sama Persis)
-    $query = \App\Models\Surat::with(['disposisis.tujuanSatker', 'user'])
-        ->whereIn('status', [
-            'selesai', 'selesai_edaran', 'diarsipkan', 'disimpan', 
-            'arsip_satker', 'di_satker', 'didisposisi'
-        ])
-        ->where(function($q) use ($bauSatkerId) {
-            $q->where('tujuan_satker_id', '!=', $bauSatkerId)
-              ->orWhereNull('tujuan_satker_id');
-        })
-        ->where(function($q) use ($user) {
-            $q->where('user_id', $user->id)
-              ->orWhereIn('tujuan_tipe', ['rektor', 'universitas'])
-              ->orWhereHas('riwayats', function($subQ) {
-                  $subQ->where('status_aksi', 'Disposisi Rektor');
-              });
-        });
-
-    // Filter Tanggal
-    if ($startDate && $endDate) {
-        $query->whereBetween('tanggal_surat', [$startDate, $endDate]);
-    }
-
-    // Filter Tipe (BARU)
+    // 4. Filter Tipe
     if ($tipeSurat && $tipeSurat != 'semua') {
         $query->where('tipe_surat', $tipeSurat);
     }
 
     $data = $query->latest('diterima_tanggal')->get();
 
-    // Generate CSV
-    $filename = "Rekap_Surat_BAU_" . date('Ymd_His') . ".csv";
+    // 5. Generate CSV
+    $filename = "Rekap_Riwayat_Disposisi_BAU_" . date('Ymd_His') . ".csv";
     
     $headers = [
         "Content-type"        => "text/csv",
@@ -447,22 +438,50 @@ public function exportRiwayatExcel(Request $request)
         "Expires"             => "0"
     ];
 
-    $columns = ['No.', 'No Surat', 'Tanggal Surat', 'Tipe', 'Perihal', 'Pengirim', 'Link File'];
+    // Tambahkan kolom 'Tujuan Disposisi'
+    $columns = ['No.', 'No Surat', 'Tanggal Surat', 'Tipe', 'Perihal', 'Pengirim', 'Tujuan Disposisi', 'Status Terakhir', 'Link File'];
 
     $callback = function() use($data, $columns) {
         $file = fopen('php://output', 'w');
+        
+        // Tambahkan BOM agar Excel bisa baca karakter utf-8 dengan benar
+        fprintf($file, chr(0xEF).chr(0xBB).chr(0xBF)); 
+        
         fputcsv($file, $columns); 
 
         foreach ($data as $index => $item) {
             $link = $item->file_surat ? asset('storage/' . $item->file_surat) : '-';
             
+            // --- LOGIKA MENGAMBIL NAMA TUJUAN DISPOSISI ---
+            $tujuanText = '-';
+            $targets = [];
+            foreach($item->disposisis as $d) {
+                if($d->tujuanSatker) {
+                    $targets[] = $d->tujuanSatker->nama_satker;
+                } elseif($d->disposisi_lain) {
+                    $targets[] = $d->disposisi_lain;
+                }
+            }
+            if(count($targets) > 0) {
+                $tujuanText = implode(', ', $targets);
+            } else {
+                // Cek jika tipe edaran
+                if($item->tujuan_tipe == 'edaran_semua_satker') {
+                    $tujuanText = 'Semua Satker (Edaran)';
+                } else {
+                    $tujuanText = 'Menunggu Disposisi';
+                }
+            }
+
             fputcsv($file, [
                 $index + 1,
                 $item->nomor_surat,
                 $item->tanggal_surat->format('d-m-Y'),
-                ucfirst($item->tipe_surat), // Tambah kolom tipe di excel
+                ucfirst($item->tipe_surat),
                 $item->perihal,
                 $item->surat_dari,
+                $tujuanText, // Masukkan data tujuan
+                $item->status,
                 $link
             ]);
         }
@@ -471,6 +490,8 @@ public function exportRiwayatExcel(Request $request)
 
     return response()->stream($callback, 200, $headers);
 }
+
+
 
     public function showRiwayatDetail(Surat $surat)
     {
@@ -893,5 +914,17 @@ Pesan ini dikirim otomatis oleh Sistem e-Surat.";
         $surat->update(['status' => 'diarsipkan']);
         RiwayatSurat::create(['surat_id' => $surat->id, 'user_id' => Auth::id(), 'status_aksi' => 'Selesai (Manual)', 'catatan' => 'Diarsipkan oleh BAU.']);
         return redirect()->route('bau.disposisi.index')->with('success', 'Berhasil ditandai selesai.');
+    }
+
+    public function showDisposisi()
+    {
+        // Ambil surat yang statusnya 'didisposisi' (artinya sudah dari Rektor)
+        // Kita load relasi 'disposisis' untuk melihat instruksi Rektor
+        $suratDisposisi = Surat::with(['disposisis.tujuanSatker'])
+                            ->where('status', 'didisposisi')
+                            ->latest('updated_at') // Urutkan dari yang baru didisposisi
+                            ->get();
+
+        return view('bau.disposisi_index', compact('suratDisposisi'));
     }
 }

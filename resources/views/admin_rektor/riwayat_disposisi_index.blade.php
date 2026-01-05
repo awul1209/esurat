@@ -101,132 +101,146 @@
             <hr class="text-muted my-3">
 
             {{-- 2. BAGIAN TABEL --}}
-            <div class="table-responsive">
-                <table id="tabelRiwayat" class="table table-hover align-middle table-sm table-bordered" style="width:100%">
-                    <thead class="table-light text-center">
-                        <tr>
-                            <th width="5%">No</th>
-                            <th>No Agenda/Surat</th>
-                            <th>Tipe</th>
-                            <th>Perihal</th>
-                            <th>Asal Surat</th>
-                            <th>Status</th>
-                            <th>Tujuan Akhir</th>
-                            <th width="10%">Aksi</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach ($suratSelesai as $surat) 
-                        @php
-                            // LOGIKA TUJUAN
-                            $tipe = $surat->tujuan_tipe;
-                            $tujuanAkhirHTML = '-';
-                            $tujuanModalText = '-';
+           <div class="table-responsive">
+    <table id="tabelRiwayat" class="table table-hover align-middle table-sm table-bordered" style="width:100%">
+        <thead class="table-light text-center">
+            <tr>
+                <th width="5%">No</th>
+                <th>No Agenda/Surat</th>
+                <th>Tipe</th>
+                <th>Perihal</th>
+                <th>Asal Surat</th>
+                <th>Status</th>
+                <th>Tujuan Akhir</th>
+                <th width="10%">Aksi</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach ($suratSelesai as $surat) 
+            @php
+                // LOGIKA TUJUAN
+                $tipe = $surat->tujuan_tipe;
+                $tujuanAkhirHTML = '-';
+                $tujuanModalText = '-';
 
-                            // Fallback jika tipe kosong
-                            if (empty($tipe)) {
-                                if ($surat->tujuan_satker_id) { $tipe = 'satker'; } 
-                                elseif ($surat->tujuan_user_id) { $tipe = 'pegawai'; } 
-                                else { $tipe = 'universitas'; }
-                            }
+                // Fallback jika tipe kosong
+                if (empty($tipe)) {
+                    if ($surat->tujuan_satker_id) { $tipe = 'satker'; } 
+                    elseif ($surat->tujuan_user_id) { $tipe = 'pegawai'; } 
+                    else { $tipe = 'universitas'; }
+                }
 
-                            if ($tipe == 'rektor') {
-                                $tujuanAkhirHTML = '<span class="fw-bold text-primary">Rektor</span>';
-                                $tujuanModalText = 'Rektor';
-                            } elseif ($tipe == 'universitas') {
-                                $listDisposisi = $surat->disposisis;
-                                $namaTujuansHTML = []; $namaTujuansText = [];
-                                foreach($listDisposisi as $d) {
-                                    if ($d->tujuanSatker) {
-                                        $namaTujuansHTML[] = '<span class="text-primary fw-bold">' . $d->tujuanSatker->nama_satker . '</span>';
-                                        $namaTujuansText[] = $d->tujuanSatker->nama_satker;
-                                    } elseif ($d->disposisi_lain) {
-                                        $namaTujuansHTML[] = '<span class="text-dark fst-italic">' . $d->disposisi_lain . '</span>';
-                                        $namaTujuansText[] = $d->disposisi_lain;
-                                    }
-                                }
-                                if (count($namaTujuansHTML) > 0) {
-                                    $penerimaHTML = implode(', ', $namaTujuansHTML);
-                                    $penerimaText = implode(', ', $namaTujuansText);
-                                    $tujuanAkhirHTML = '<span class="fw-bold text-primary">Universitas</span><br><small class="text-muted">Disp: ' . $penerimaHTML . '</small>';
-                                    $tujuanModalText = 'Universitas (Disp: ' . $penerimaText . ')';
-                                } else {
-                                    $tujuanAkhirHTML = '<span class="fw-bold text-primary">Universitas</span><br><small class="text-muted">Arsip Rektor</small>';
-                                    $tujuanModalText = 'Universitas (Arsip Rektor)';
-                                }
-                            } elseif ($tipe == 'satker') {
-                                $nama = $surat->tujuanSatker->nama_satker ?? 'Satker Tidak Ditemukan';
-                                $tujuanAkhirHTML = '<span class="fw-bold text-success">' . $nama . '</span> <small>(Lgsg)</small>';
-                                $tujuanModalText = $nama;
-                            } elseif ($tipe == 'pegawai') {
-                                $nama = $surat->tujuanUser->name ?? 'Pegawai Tidak Ditemukan';
-                                $tujuanAkhirHTML = '<span class="fw-bold text-info">' . $nama . '</span> <small>(Ybs)</small>';
-                                $tujuanModalText = $nama;
-                            } elseif ($tipe == 'edaran_semua_satker') {
-                                $tujuanAkhirHTML = '<span class="fw-bold text-secondary">Semua Satker (Edaran)</span>';
-                                $tujuanModalText = 'Semua Satker (Edaran)';
-                            }
-                        @endphp
+                if ($tipe == 'rektor') {
+                    // Jika tipe rektor tapi masuk sini, berarti didisposisi (cek relasi disposisi)
+                    if($surat->disposisis->count() > 0){
+                         $d = $surat->disposisis->first();
+                         $namaSatker = $d->tujuanSatker->nama_satker ?? 'Satker Lain';
+                         $tujuanAkhirHTML = '<span class="fw-bold text-primary">Rektor</span> <i class="bi bi-arrow-right-short"></i> ' . $namaSatker;
+                         $tujuanModalText = 'Rektor (Disp: ' . $namaSatker . ')';
+                    } else {
+                         $tujuanAkhirHTML = '<span class="fw-bold text-primary">Rektor</span>';
+                         $tujuanModalText = 'Rektor';
+                    }
+                } elseif ($tipe == 'universitas') {
+                    $listDisposisi = $surat->disposisis;
+                    $namaTujuansHTML = []; $namaTujuansText = [];
+                    
+                    foreach($listDisposisi as $d) {
+                        if ($d->tujuanSatker) {
+                            $namaTujuansHTML[] = '<span class="text-primary fw-bold">' . $d->tujuanSatker->nama_satker . '</span>';
+                            $namaTujuansText[] = $d->tujuanSatker->nama_satker;
+                        } elseif ($d->disposisi_lain) {
+                            $namaTujuansHTML[] = '<span class="text-dark fst-italic">' . $d->disposisi_lain . '</span>';
+                            $namaTujuansText[] = $d->disposisi_lain;
+                        }
+                    }
+                    
+                    if (count($namaTujuansHTML) > 0) {
+                        $penerimaHTML = implode(', ', $namaTujuansHTML);
+                        $penerimaText = implode(', ', $namaTujuansText);
+                        $tujuanAkhirHTML = '<span class="fw-bold text-primary">Universitas</span><br><small class="text-muted">Disp: ' . $penerimaHTML . '</small>';
+                        $tujuanModalText = 'Universitas (Disp: ' . $penerimaText . ')';
+                    } else {
+                        // Seharusnya tidak masuk sini karena status sudah difilter di controller
+                        $tujuanAkhirHTML = '<span class="fw-bold text-primary">Universitas</span>';
+                        $tujuanModalText = 'Universitas';
+                    }
+                } elseif ($tipe == 'satker') {
+                    $nama = $surat->tujuanSatker->nama_satker ?? 'Satker Tidak Ditemukan';
+                    $tujuanAkhirHTML = '<span class="fw-bold text-success">' . $nama . '</span> <small>(Lgsg)</small>';
+                    $tujuanModalText = $nama;
+                } elseif ($tipe == 'pegawai') {
+                    $nama = $surat->tujuanUser->name ?? 'Pegawai Tidak Ditemukan';
+                    $tujuanAkhirHTML = '<span class="fw-bold text-info">' . $nama . '</span> <small>(Ybs)</small>';
+                    $tujuanModalText = $nama;
+                } elseif ($tipe == 'edaran_semua_satker') {
+                    $tujuanAkhirHTML = '<span class="fw-bold text-secondary">Semua Satker (Edaran)</span>';
+                    $tujuanModalText = 'Semua Satker (Edaran)';
+                }
+            @endphp
 
-                        <tr>
-                            <td class="text-center fw-bold">{{ $loop->iteration }}</td>
-                            <td class="text-center">{{ $surat->no_agenda }} <br> {{ $surat->nomor_surat }}</td>
-                            
-                            {{-- Kolom Tipe --}}
-                            <td class="text-center">
-                                @if($surat->tipe_surat == 'internal')
-                                    <span class="badge text-bg-info text-white">Internal</span>
-                                @else
-                                    <span class="badge text-bg-warning text-dark">Eksternal</span>
-                                @endif
-                            </td>
+            <tr>
+                <td class="text-center fw-bold">{{ $loop->iteration }}</td>
+                <td class="text-center">{{ $surat->no_agenda }} <br> {{ $surat->nomor_surat }}</td>
+                
+                {{-- Kolom Tipe --}}
+                <td class="text-center">
+                    @if($surat->tipe_surat == 'internal')
+                        <span class="badge text-bg-info text-white">Internal</span>
+                    @else
+                        <span class="badge text-bg-warning text-dark">Eksternal</span>
+                    @endif
+                </td>
 
-                            <td>{{ $surat->perihal }}</td>
-                            <td>{{ $surat->surat_dari }}</td>
-                            <td class="text-center">
-                                @if(in_array($surat->status, ['selesai', 'arsip_satker', 'disimpan', 'diarsipkan', 'di_satker', 'selesai_edaran']))
-                                    <span class="badge text-bg-success">Selesai / Diarsipkan</span>
-                                @elseif($surat->status == 'didisposisi')
-                                    <span class="badge text-bg-primary">Diteruskan</span>
-                                @else
-                                    <span class="badge text-bg-secondary">{{ $surat->status }}</span>
-                                @endif
-                            </td>
-                            <td style="font-size: 12px;">{!! $tujuanAkhirHTML !!}</td>
-                            <td class="text-center">
-                                <div class="d-flex justify-content-center gap-1">
-                                    {{-- Lihat Detail --}}
-                                    <button type="button" class="btn btn-sm btn-info text-white" 
-                                        data-bs-toggle="modal" data-bs-target="#detailSuratModal"
-                                        data-no-agenda="{{ $surat->no_agenda }}"
-                                        data-perihal="{{ $surat->perihal }}"
-                                        data-asal-surat="{{ $surat->surat_dari }}"
-                                        data-tanggal-surat="{{ $surat->tanggal_surat->isoFormat('D MMMM YYYY') }}"
-                                        data-tanggal-diterima="{{ $surat->diterima_tanggal->isoFormat('D MMMM YYYY') }}"
-                                        data-tujuan="{{ $tujuanModalText }}"
-                                        data-file-url="{{ Storage::url($surat->file_surat) }}">
-                                        <i class="bi bi-eye-fill"></i>
-                                    </button>
+                <td>{{ $surat->perihal }}</td>
+                <td>{{ $surat->surat_dari }}</td>
+                <td class="text-center">
+                    @if($surat->status == 'arsip_satker')
+                        <span class="badge text-bg-success">Selesai (Satker)</span>
+                    @elseif($surat->status == 'didisposisi')
+                        <span class="badge text-bg-primary">Diteruskan</span>
+                    @elseif($surat->status == 'di_satker')
+                        <span class="badge text-bg-info text-white">Diterima Satker</span>
+                    @elseif($surat->status == 'selesai_edaran')
+                        <span class="badge text-bg-secondary">Edaran Selesai</span>
+                    @else
+                        <span class="badge text-bg-secondary">{{ $surat->status }}</span>
+                    @endif
+                </td>
+                <td style="font-size: 12px;">{!! $tujuanAkhirHTML !!}</td>
+                <td class="text-center">
+                    <div class="d-flex justify-content-center gap-1">
+                        {{-- Lihat Detail --}}
+                        <button type="button" class="btn btn-sm btn-info text-white" 
+                            data-bs-toggle="modal" data-bs-target="#detailSuratModal"
+                            data-no-agenda="{{ $surat->no_agenda }}"
+                            data-perihal="{{ $surat->perihal }}"
+                            data-asal-surat="{{ $surat->surat_dari }}"
+                            data-tanggal-surat="{{ $surat->tanggal_surat->isoFormat('D MMMM YYYY') }}"
+                            data-tanggal-diterima="{{ $surat->diterima_tanggal->isoFormat('D MMMM YYYY') }}"
+                            data-tujuan="{{ $tujuanModalText }}"
+                            data-file-url="{{ Storage::url($surat->file_surat) }}">
+                            <i class="bi bi-eye-fill"></i>
+                        </button>
 
-                                    {{-- Cetak Disposisi --}}
-                                    <a href="{{ route('cetak.disposisi', $surat->id) }}" target="_blank" class="btn btn-sm btn-outline-danger" title="Cetak Lembar Disposisi">
-                                        <i class="bi bi-printer-fill"></i>
-                                    </a>
-                                    
-                                    {{-- Timeline Riwayat --}}
-                                    {{-- PERBAIKAN: Memanggil route detail yang baru dibuat --}}
-                                    <button type="button" class="btn btn-sm btn-secondary" 
-                                        data-bs-toggle="modal" data-bs-target="#riwayatModal"
-                                        data-url="{{ route('adminrektor.disposisi.riwayat.detail', $surat->id) }}">
-                                        <i class="bi bi-clock-history"></i>
-                                    </button>
-                                </div>
-                            </td>
-                        </tr>
-                        @endforeach 
-                    </tbody>
-                </table>
-            </div>
+                        {{-- Cetak Disposisi --}}
+                        <a href="{{ route('cetak.disposisi', $surat->id) }}" target="_blank" class="btn btn-sm btn-outline-danger" title="Cetak Lembar Disposisi">
+                            <i class="bi bi-printer-fill"></i>
+                        </a>
+                        
+                        {{-- Timeline Riwayat --}}
+                        <button type="button" class="btn btn-sm btn-secondary" 
+                            data-bs-toggle="modal" data-bs-target="#riwayatModal"
+                            data-url="{{ route('adminrektor.disposisi.riwayat.detail', $surat->id) }}">
+                            <i class="bi bi-clock-history"></i>
+                        </button>
+                    </div>
+                </td>
+            </tr>
+            @endforeach 
+        </tbody>
+    </table>
+</div>
         </div>
     </div>
 </div>

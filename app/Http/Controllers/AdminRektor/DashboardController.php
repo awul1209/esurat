@@ -92,8 +92,7 @@ class DashboardController extends Controller
         $agendaQuery = Surat::with(['riwayats'])
             ->whereIn('tujuan_tipe', $scopeRektor)
             ->where(function($q) {
-                $q->where('status', 'selesai')
-                  ->orWhere('status', 'diarsipkan');
+                $q->where('status', 'selesai');
             })
             ->get();
 

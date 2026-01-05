@@ -119,7 +119,7 @@
                 $satkerIdAsal = $matchSatker->id;
             }
         } else {
-            $namaSatker = $surat->satker->nama_satker ?? ($surat->user->satker->nama_satker ?? 'Satker Tidak Dikenal');
+            $namaSatker = $surat->satker->nama_satker ?? ($surat->user->satker->nama_satker ?? 'Rektorat');
             $penginput = $surat->user->name ?? '-';
             $satkerIdAsal = ''; // Tidak dipakai untuk surat otomatis
         }
@@ -173,8 +173,8 @@
 
                 {{-- TOMBOL CETAK (Disposisi Rektor) --}}
                 @if($isDisposisiRektor && !$isMyInput)
-                    <a href="#" class="btn btn-dark btn-sm btn-icon shadow-sm" onclick="alert('Fitur cetak...')">
-                        <i class="bi bi-printer-fill"></i>
+                    <!-- <a href="#" class="btn btn-dark btn-sm btn-icon shadow-sm" onclick="alert('Fitur cetak...')">
+                        <i class="bi bi-printer-fill"></i> -->
                     </a>
                 @endif
 

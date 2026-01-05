@@ -17,16 +17,16 @@
     .text-gray-300 { color: #dddfeb !important; }
     .text-gray-800 { color: #5a5c69 !important; }
     .fw-bold { font-weight: 700 !important; }
-    .h5 { font-size: 1.25rem; }
+    .h5 { font-size: 1rem; }
 
     /* Chart Styles */
-    .chart-area { position: relative; height: 200px; width: 100%; }
-    .chart-pie { position: relative; height: 245px; width: 100%; }
+    .chart-area { position: relative; height: 220px; width: 100%; }
+    .chart-pie { position: relative; height: 265px; width: 100%; }
 
     /* Calendar Fix */
-    #calendar { font-size: 0.75rem; }
+    #calendar { max-height: auto; font-size: 0.7rem; }
     .fc-toolbar-title { font-size: 0.9rem !important; font-weight: bold; }
-    .fc-button { font-size: 0.75rem !important; }
+    .fc-button { font-size: 0.7rem !important; }
     .fc-event { cursor: pointer; }
 </style>
 @endpush
@@ -34,90 +34,77 @@
 @section('content')
 <div class="container-fluid px-3">
 
-    {{-- BAGIAN 1: 4 KARTU KPI (DIPERBAIKI JARAKNYA) --}}
-    {{-- 'gx-3' merapatkan jarak horizontal, 'mt-3' mengurangi jarak dari atas --}}
+    {{-- BAGIAN 1: 4 KARTU KPI --}}
     <div class="row gx-3 mt-2">
         
-        {{-- Card 1: Masuk (Rektor) - Pending --}}
-        <div class="col-xl-3 col-md-6 mb-3"> {{-- Ubah mb-4 jadi mb-3 --}}
+        {{-- Card 1 --}}
+        <div class="col-xl-3 col-md-6 mb-3">
             <div class="card border-left-primary shadow h-100 py-2">
                 <div class="card-body">
                     <div class="row no-gutters align-items-center">
                         <div class="col mr-2">
-                            <div class="text-xs fw-bold text-primary text-uppercase mb-1">
-                                Masuk (Untuk Rektor)</div>
+                            <div class="text-xs fw-bold text-primary text-uppercase mb-1">Masuk (Untuk Rektor)</div>
                             <div class="h5 mb-0 fw-bold text-gray-800">{{ $untukRektorPending }}</div>
-                            <small class="text-muted">Perlu Diteruskan</small>
+                            <small class="text-muted">Masuk Hari Ini</small>
                         </div>
-                        <div class="col-auto">
-                            <i class="bi bi-envelope-exclamation-fill h2 text-gray-300"></i>
-                        </div>
+                        <div class="col-auto"><i class="bi bi-envelope-exclamation-fill h2 text-gray-300"></i></div>
                     </div>
                 </div>
             </div>
         </div>
 
-        {{-- Card 2: Inbox BAU --}}
+        {{-- Card 2 --}}
         <div class="col-xl-3 col-md-6 mb-3">
             <div class="card border-left-warning shadow h-100 py-2">
                 <div class="card-body">
                     <div class="row no-gutters align-items-center">
                         <div class="col mr-2">
-                            <div class="text-xs fw-bold text-warning text-uppercase mb-1">
-                                Inbox BAU</div>
+                            <div class="text-xs fw-bold text-warning text-uppercase mb-1">Inbox BAU</div>
                             <div class="h5 mb-0 fw-bold text-gray-800">{{ $inboxBau }}</div>
-                            <small class="text-muted">Surat Khusus BAU</small>
+                            <small class="text-muted">Total (Int + Eks)</small>
                         </div>
-                        <div class="col-auto">
-                            <i class="bi bi-inbox-fill h2 text-gray-300"></i>
-                        </div>
+                        <div class="col-auto"><i class="bi bi-inbox-fill h2 text-gray-300"></i></div>
                     </div>
                 </div>
             </div>
         </div>
 
-        {{-- Card 3: Sedang di Rektor --}}
+        {{-- Card 3 --}}
         <div class="col-xl-3 col-md-6 mb-3">
             <div class="card border-left-info shadow h-100 py-2">
                 <div class="card-body">
                     <div class="row no-gutters align-items-center">
                         <div class="col mr-2">
-                            <div class="text-xs fw-bold text-info text-uppercase mb-1">
-                                Sedang di Rektor</div>
+                            <div class="text-xs fw-bold text-info text-uppercase mb-1">Sedang di Rektor</div>
                             <div class="h5 mb-0 fw-bold text-gray-800">{{ $sudahKeRektor }}</div>
                             <small class="text-muted">Menunggu Disposisi</small>
                         </div>
-                        <div class="col-auto">
-                            <i class="bi bi-hourglass-split h2 text-gray-300"></i>
-                        </div>
+                        <div class="col-auto"><i class="bi bi-hourglass-split h2 text-gray-300"></i></div>
                     </div>
                 </div>
             </div>
         </div>
 
-        {{-- Card 4: Siap ke Satker --}}
+        {{-- Card 4 --}}
         <div class="col-xl-3 col-md-6 mb-3">
             <div class="card border-left-success shadow h-100 py-2">
                 <div class="card-body">
                     <div class="row no-gutters align-items-center">
                         <div class="col mr-2">
-                            <div class="text-xs fw-bold text-success text-uppercase mb-1">
-                                Siap ke Satker</div>
+                            <div class="text-xs fw-bold text-success text-uppercase mb-1">Siap ke Satker</div>
                             <div class="h5 mb-0 fw-bold text-gray-800">{{ $siapKeSatker }}</div>
                             <small class="text-muted">Hasil Disposisi Rektor</small>
                         </div>
-                        <div class="col-auto">
-                            <i class="bi bi-send-check-fill h2 text-gray-300"></i>
-                        </div>
+                        <div class="col-auto"><i class="bi bi-send-check-fill h2 text-gray-300"></i></div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
 
-    {{-- BAGIAN 2: CHART GARIS & BAR (KOMPOSISI) --}}
+    {{-- BAGIAN 2: CHART GARIS & BAR --}}
     <div class="row">
-        {{-- Line Chart: Tren --}}
+        {{-- Line Chart --}}
         <div class="col-xl-7 col-lg-7">
             <div class="card shadow mb-4">
                 <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
@@ -128,14 +115,14 @@
                         <canvas id="trenSuratChart"></canvas>
                     </div>
                     <div class="mt-2 text-center small">
-                        <span class="me-3"><i class="bi bi-circle-fill text-primary"></i> Rektor</span>
-                        <span class="me-3"><i class="bi bi-circle-fill text-warning"></i> BAU</span>
+                        <span class="me-3"><i class="bi bi-circle-fill text-primary"></i> Rektor (Eks)</span>
+                        <span class="me-3"><i class="bi bi-circle-fill text-warning"></i> BAU (Int+Eks)</span>
                     </div>
                 </div>
             </div>
         </div>
 
-        {{-- Bar Chart: Komposisi Detail --}}
+        {{-- Bar Chart --}}
         <div class="col-xl-5 col-lg-5">
             <div class="card shadow mb-4">
                 <div class="card-header py-2">
@@ -150,19 +137,24 @@
         </div>
     </div>
 
-   {{-- BAGIAN 3: TABEL AKSI & KALENDER (PENGGANTI BAR CHART) --}}
-    <div class="row">
+   {{-- BAGIAN 3: TABEL AKSI & KALENDER --}}
+<div class="row">
         {{-- Tabel Aksi Cepat --}}
-        <div class="col-lg-6">
+<div class="col-lg-7">
             <div class="card shadow mb-4">
                 <div class="card-header py-3">
-                    <h6 class="m-0 fw-bold text-danger">Tindakan Cepat (Pending di BAU)</h6>
+                    <h6 class="m-0 fw-bold text-primary">Aksi Cepat</h6>
                 </div>
                 <div class="card-body">
                     <div class="table-responsive">
-                        <table class="table table-bordered table-hover" width="100%" cellspacing="0" style="font-size:13px;">
+                        <table class="table table-bordered table-hover" width="100%" cellspacing="0" style="font-size:12px;">
                             <thead class="table-light">
-                                <tr><th>Asal</th><th>Perihal</th><th>Status</th><th class="text-center">Aksi</th></tr>
+                                <tr>
+                                    <th>Asal</th>
+                                    <th>Perihal</th>
+                                    <th>Status</th>
+                                    <th class="text-center">Aksi</th>
+                                </tr>
                             </thead>
                             <tbody>
                                 @forelse($suratPending as $surat)
@@ -170,19 +162,47 @@
                                     <td>{{ $surat->surat_dari }}</td>
                                     <td>{{ \Illuminate\Support\Str::limit($surat->perihal, 30) }}</td>
                                     <td>
-                                        @if($surat->status == 'didisposisi') <span class="badge bg-success">Siap Kirim</span>
-                                        @else <span class="badge bg-secondary">Baru</span> @endif
+                                        @if($surat->status == 'didisposisi') 
+                                            <span class="badge bg-success">Siap Kirim (Balikan)</span>
+                                        @elseif($surat->status == 'baru_di_bau')
+                                            {{-- Bedakan Label badge agar jelas --}}
+                                            @if($surat->tipe_surat == 'internal')
+                                                <span class="badge bg-info text-white">Baru (Internal)</span>
+                                            @else
+                                                <span class="badge bg-warning text-dark">Baru (Eksternal)</span>
+                                            @endif
+                                        @endif
                                     </td>
                                     <td class="text-center">
+                                        {{-- LOGIKA AKSI --}}
                                         @if($surat->status == 'didisposisi')
-                                            <a href="{{ route('bau.disposisi.index') }}" class="btn btn-success btn-sm py-0"><i class="bi bi-send"></i></a>
-                                        @else
-                                            <a href="{{ route('bau.surat.eksternal') }}" class="btn btn-primary btn-sm py-0"><i class="bi bi-arrow-right"></i></a>
+                                            {{-- Kasus 1: Surat sudah didisposisi Rektor, tugas BAU meneruskan ke Satker --}}
+                                            <a href="{{ route('bau.disposisi.index') }}" class="btn btn-success btn-sm py-0" title="Kirim ke Satker">
+                                                <i class="bi bi-send"></i>
+                                            </a>
+
+                                        @elseif($surat->status == 'baru_di_bau')
+                                            {{-- Kasus 2: Surat Baru Masuk (Harus diteruskan ke Rektor) --}}
+                                            
+                                            @php
+                                                // Cek tipe surat untuk menentukan arah Link
+                                                $routeTarget = ($surat->tipe_surat == 'internal') 
+                                                    ? route('bau.surat.internal')   // Ganti sesuai nama route index internal Anda
+                                                    : route('bau.surat.eksternal'); // Ganti sesuai nama route index eksternal Anda
+                                            @endphp
+
+                                            <a href="{{ $routeTarget }}" class="btn btn-primary btn-sm py-0" title="Lihat & Teruskan ke Rektor">
+                                                <i class="bi bi-eye"></i>
+                                            </a>
                                         @endif
                                     </td>
                                 </tr>
                                 @empty
-                                <tr><td colspan="4" class="text-center text-muted">Tidak ada surat pending.</td></tr>
+                                <tr>
+                                    <td colspan="4" class="text-center text-muted py-3">
+                                        <i class="bi bi-check-circle me-1"></i> Tidak ada surat pending. Pekerjaan selesai!
+                                    </td>
+                                </tr>
                                 @endforelse
                             </tbody>
                         </table>
@@ -191,16 +211,15 @@
             </div>
         </div>
 
-        {{-- Kalender Agenda BAU (MENGGANTIKAN BAR CHART) --}}
-        <div class="col-lg-6">
+        {{-- Kalender Agenda BAU --}}
+        <div class="col-lg-5">
             <div class="card shadow mb-4">
                 <div class="card-header py-3">
-                    <h6 class="m-0 fw-bold text-success">
-                        <i class="bi bi-calendar-event me-2"></i>Agenda Surat BAU (Mendatang)
+                    <h6 class="m-0 fw-bold text-primary">
+                        <i class="bi bi-calendar-event me-2"></i>Agenda Surat BAU
                     </h6>
                 </div>
                 <div class="card-body">
-                    {{-- Responsive Table Wrapper agar scrollable di mobile --}}
                     <div class="table-responsive">
                         <div id="calendar"></div>
                     </div>
@@ -213,9 +232,9 @@
     <div class="modal fade" id="calendarModal" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
             <div class="modal-content border-0 shadow">
-                <div class="modal-header bg-warning text-dark border-0">
-                    <h6 class="modal-title fw-bold">
-                        <i class="bi bi-calendar2-week me-2"></i>Agenda BAU: <span id="modalDate"></span>
+                <div class="modal-header bg-primary text-dark border-0">
+                    <h6 class="modal-title fw-bold" style="color:white;">
+                        <i class="bi bi-calendar2-week me-2" style="color:white;"></i>Agenda BAU: <span id="modalDate"></span>
                     </h6>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
@@ -233,20 +252,22 @@
 @endsection
 
 @push('scripts')
+{{-- Library --}}
 <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+{{-- FIX: TAMBAHKAN SCRIPT FULLCALENDAR INI AGAR TIDAK EROR --}}
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js"></script>
 
 <script>
     const lineLabels = @json($lineLabels);
     const dataRektor = @json($dataRektor);
     const dataBau    = @json($dataBau);
     const komposisiData = @json($komposisiData);
-    // Data Kalender
     const calendarEvents = @json($calendarEvents);
 
     document.addEventListener('DOMContentLoaded', function() {
         
-        // 1. LINE CHART (TETAP)
+        // 1. LINE CHART
         const ctxLine = document.getElementById("trenSuratChart");
         if (ctxLine) {
             new Chart(ctxLine, {
@@ -262,7 +283,7 @@
             });
         }
 
-        // 2. BAR CHART KOMPOSISI (TETAP)
+        // 2. BAR CHART KOMPOSISI
         const ctxKomposisi = document.getElementById("komposisiChart");
         if (ctxKomposisi) {
             new Chart(ctxKomposisi, {
@@ -272,7 +293,7 @@
                     datasets: [{
                         label: 'Jumlah Surat',
                         data: komposisiData,
-                        backgroundColor: ['#4e73df', '#858796', '#f6c23e', '#e74a3b'],
+                        backgroundColor: ['#4e73df', '#1114aeff', '#1cc88a', '#f6c23e'], 
                         borderWidth: 1
                     }],
                 },
@@ -280,17 +301,17 @@
             });
         }
 
-        // 3. FULLCALENDAR (BARU - PENGGANTI DISTRIBUSI)
+        // 3. FULLCALENDAR
         var calendarEl = document.getElementById('calendar');
         if (calendarEl) {
             var calendar = new FullCalendar.Calendar(calendarEl, {
                 initialView: 'dayGridMonth',
                 locale: 'id',
-                contentHeight: 'auto', // Tinggi menyesuaikan konten
+                contentHeight: 'auto',
                 headerToolbar: {
                     left: 'prev,next today',
                     center: 'title',
-                    right: '' // Sederhana saja
+                    right: ''
                 },
                 buttonText: { today: 'Hari Ini' },
                 events: calendarEvents,
@@ -299,7 +320,6 @@
                     info.el.title = "Klik detail";
                 },
 
-                // Logika Klik (Sama seperti dashboard lain)
                 eventClick: function(info) {
                     info.jsEvent.preventDefault();
                     
@@ -317,8 +337,8 @@
                     if (eventsOnDay.length > 0) {
                         eventsOnDay.forEach(function(evt) {
                             var props = evt.extendedProps;
-                            var badgeClass = 'bg-warning text-dark'; // Default BAU (Kuning)
-                            var borderClass = 'border-warning';
+                            var badgeClass = (props.tipe === 'Internal') ? 'bg-success text-white' : 'bg-warning text-dark';
+                            var borderClass = (props.tipe === 'Internal') ? 'border-success' : 'border-warning';
 
                             listHtml += `
                                 <div class="card mb-3 shadow-sm border-0 border-start border-4 ${borderClass}">
@@ -330,9 +350,9 @@
                                                 <span class="fw-bold text-dark small">${props.nomor_surat}</span>
                                             </div>
                                         </div>
-                                        <h6 class="fw-bold text-dark mb-2" style="font-size: 0.95rem;">${props.perihal_full}</h6>
+                                        <h6 class="fw-bold text-dark mb-2" style="font-size: 0.75rem;">${props.perihal_full}</h6>
                                         <div class="d-flex align-items-center bg-light border rounded p-2">
-                                            <i class="bi bi-building fs-5 text-warning me-2"></i>
+                                            <i class="bi bi-building fs-5 text-secondary me-2"></i>
                                             <div>
                                                 <small class="text-muted d-block" style="font-size: 0.7rem;">Pengirim:</small>
                                                 <strong class="text-dark small">${props.pengirim}</strong>

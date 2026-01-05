@@ -376,6 +376,9 @@
                             </a>
                         </div>
                     </div>
+                    <a href="{{ route('adminrektor.arsip.index') }}" class="list-group-item list-group-item-action {{ Request::routeIs('adminrektor.arsip.index') ? 'active' : '' }}">
+    <i class="bi bi-archive-fill"></i> <span class="menu-text">Arsip Rektor</span>
+</a>
                     <a href="{{ route('adminrektor.disposisi.riwayat') }}" class="list-group-item list-group-item-action {{ Request::routeIs('adminrektor.disposisi.riwayat') ? 'active' : '' }}">
                         <i class="bi bi-clock-history"></i> <span class="menu-text">Riwayat Disposisi</span>
                     </a>

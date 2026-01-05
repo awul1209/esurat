@@ -272,9 +272,9 @@
                                         
                                         {{-- TOMBOL CETAK --}}
                                         @if($isProcessed && $myDisposisi && !$isMyInput)
-                                            <a href="{{ route('cetak.disposisi', $surat->id) }}" target="_blank" class="btn btn-sm btn-outline-danger" title="Cetak Lembar Disposisi">
+                                            <!-- <a href="{{ route('cetak.disposisi', $surat->id) }}" target="_blank" class="btn btn-sm btn-outline-danger" title="Cetak Lembar Disposisi">
                                                 <i class="bi bi-printer-fill"></i>
-                                            </a>
+                                            </a> -->
                                         @endif
                                     </div>
                                 </td>

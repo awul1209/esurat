@@ -173,6 +173,16 @@ Route::get('/riwayat-disposisi/export', [DisposisiController::class, 'exportRiwa
     // Surat Keluar Eksternal
     Route::resource('surat-keluar-eksternal', App\Http\Controllers\AdminRektor\SuratKeluarEksternalController::class);
     Route::get('surat-keluar-eksternal-export', [App\Http\Controllers\AdminRektor\SuratKeluarEksternalController::class, 'export'])->name('surat-keluar-eksternal.export');
+
+    // ROUTE ARSIP REKTOR (BARU)
+    Route::get('arsip', [App\Http\Controllers\AdminRektor\ArsipController::class, 'index'])->name('arsip.index');
+    Route::get('arsip/export', [App\Http\Controllers\AdminRektor\ArsipController::class, 'export'])->name('arsip.export');
+
+    // riwayat
+    Route::get('/arsip/riwayat/{surat}', [App\Http\Controllers\AdminRektor\ArsipController::class, 'showRiwayatDetail'])
+        ->name('arsip.riwayat.detail');
+
+
     });
 
     // --- GRUP UNTUK ADMIN SATKER ---

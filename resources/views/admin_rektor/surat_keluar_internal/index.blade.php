@@ -126,15 +126,22 @@
                             <td class="text-center fw-bold">{{ $loop->iteration }}</td>
                             
                             <td>
-                                <div class="fw-bold text-dark">
-                                    @if($surat->penerimaInternal->count() > 0)
-                                        {{ $surat->penerimaInternal->first()->nama_satker }}
-                                        @if($surat->penerimaInternal->count() > 1)
-                                            <span class="text-muted small ms-1">(+{{ $surat->penerimaInternal->count() - 1 }} lainnya)</span>
-                                        @endif
-                                    @else - @endif
-                                </div>
-                                <div class="badge-via"><i class="bi bi-arrow-right-circle me-1"></i> Via Internal</div>
+                            <div class="text-dark">
+                            @if($surat->penerimaInternal->count() > 0)
+                            {{-- Loop untuk menampilkan SEMUA penerima --}}
+                            @foreach($surat->penerimaInternal as $penerima)
+                            <div class="fw-bold mb-1" style="font-size: 13px;">
+                            <i class="bi bi-dot"></i> {{ $penerima->nama_satker }}
+                            </div>
+                            @endforeach
+                            @else
+                            -
+                            @endif
+                            </div>
+
+                            <div class="badge-via mt-2 text-muted small">
+                            <i class="bi bi-arrow-right-circle me-1"></i> Via Internal
+                            </div>
                             </td>
                             <td>
                                 <a href="#" class="text-no-surat d-block mb-1">{{ $surat->nomor_surat }}</a>

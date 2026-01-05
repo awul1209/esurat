@@ -82,7 +82,7 @@ public function indexMasuk(Request $request)
         return view('satker.internal.surat_masuk_index', compact('suratMasuk', 'daftarSatker', 'daftarPegawai'));
     }
 
-   // 2. PERBAIKAN METHOD EXPORT (GABUNGAN MANUAL & OTOMATIS)
+
    // 2. PERBAIKAN METHOD EXPORT (FINAL & RAPI)
     public function exportMasuk(Request $request)
     {
@@ -140,7 +140,7 @@ public function indexMasuk(Request $request)
                     $tipe     = "Input Manual";
                 } else {
                     // Otomatis (SuratKeluar)
-                    $pengirim = $row->user && $row->user->satker ? $row->user->satker->nama_satker : 'Tidak Diketahui';
+                    $pengirim = $row->user && $row->user->satker ? $row->user->satker->nama_satker : 'Rektorat';
                     $tipe     = "Kiriman Satker";
                 }
 

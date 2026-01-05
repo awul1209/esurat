@@ -4,6 +4,7 @@
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
     <title>Lembar Disposisi - {{ $surat->perihal }}</title>
     <style>
+        /* ... STYLE LAMA ANDA (JANGAN DIUBAH) ... */
         body { font-family: 'Times New Roman', Times, serif; font-size: 10pt; color: #000; }
         .logo { position: absolute; top: 0px; left: 0px; width: 70px; }
         .header { text-align: center; margin-bottom: 10px; margin-left: 70px; }
@@ -41,22 +42,14 @@
 
         /* CSS KHUSUS LAMPIRAN */
         .page-break { page-break-before: always; }
-        .lampiran-container { text-align: center; width: 100%; }
-        .lampiran-img { max-width: 100%; height: auto; border: 1px solid #ccc; }
-        .lampiran-note { 
-            border: 2px dashed #999; 
-            padding: 20px; 
-            text-align: center; 
-            margin-top: 50px; 
-            color: #555;
-            background: #f9f9f9;
-        }
+        .lampiran-wrapper { text-align: center; width: 100%; margin-top: 10px; }
+        .lampiran-img { max-width: 95%; max-height: 900px; height: auto; border: 1px solid #000; }
     </style>
 </head>
 <body>
 
     @php
-        // ... (PHP Logic Anda Tetap Sama) ...
+        // ... LOGIKA PHP LAMA ANDA ...
         function centang($nama_target, $list_terpilih, $force_check = false) {
             $isi = ' '; 
             $isFound = false;
@@ -88,7 +81,7 @@
         }
     @endphp
 
-    {{-- HALAMAN 1: LEMBAR DISPOSISI (KODE ASLI ANDA) --}}
+    {{-- HALAMAN 1: LEMBAR DISPOSISI --}}
     <img src="{{ resource_path('images/unija.jpg') }}" alt="Logo" class="logo">
 
     <div class="header">
@@ -97,7 +90,7 @@
         <h3>LEMBAR DISPOSISI</h3>
     </div>
 
-    {{-- ... Tabel Info Surat ... --}}
+    {{-- Info Surat --}}
     <table class="info-table">
         <tr>
             <td class="label">Surat dari</td><td class="colon">:</td>
@@ -129,7 +122,7 @@
         </tr>
     </table>
 
-    {{-- ... Tabel Checklist ... --}}
+    {{-- Checklist Table --}}
     <table class="checklist-table">
         <tr>
             <th style="width: 55%;">DITERUSKAN KEPADA</th>
@@ -143,7 +136,7 @@
                 <br>
                 <div style="margin: 3px 0; border-bottom: 1px dashed #ccc;"></div>
                 
-                {{-- COPY PASTE TABLE FAKULTAS ANDA DISINI --}}
+                {{-- TABLE FAKULTAS ANDA --}}
                 <table class="faculty-table">
                     <tr><td>Dekan</td><td>{!! centang('Dekan FP', $satkerTujuanList) !!}</td><td>Wadek I</td><td>{!! centang('Wadek I FP', $satkerTujuanList) !!}</td><td>II</td><td>{!! centang('Wadek II FP', $satkerTujuanList) !!}</td><td class="faculty-name">FP</td></tr>
                     <tr><td>Dekan</td><td>{!! centang('Dekan FH', $satkerTujuanList) !!}</td><td>Wadek I</td><td>{!! centang('Wadek I FH', $satkerTujuanList) !!}</td><td>II</td><td>{!! centang('Wadek II FH', $satkerTujuanList) !!}</td><td class="faculty-name">FH</td></tr>
@@ -157,6 +150,7 @@
 
                 <div style="margin: 3px 0; border-bottom: 1px dashed #ccc;"></div>
 
+                {{-- DAFTAR SATKER LAIN --}}
                 {!! centang('Ketua Pusat Jaminan Mutu', $satkerTujuanList) !!} Ketua Pusat Jaminan Mutu <br>
                 {!! centang('Ketua Satuan Pengendali Internal', $satkerTujuanList) !!} Ketua Satuan Pengendali Internal <br>
                 {!! centang('Ka. LPPM', $satkerTujuanList) !!} Ka. LPPM <br>
@@ -209,41 +203,30 @@
         NIDN. 0722086203
     </div>
 
-    {{-- ================================================================= --}}
-    {{-- HALAMAN 2: LAMPIRAN FILE SURAT (PDF / GAMBAR) --}}
-    {{-- ================================================================= --}}
+    {{-- ========================================= --}}
+    {{-- HALAMAN 2: LAMPIRAN FILE                  --}}
+    {{-- ========================================= --}}
     
     @if($surat->file_surat)
         @php
             $path = storage_path('app/public/' . $surat->file_surat);
-            $extension = pathinfo($path, PATHINFO_EXTENSION);
+            $extension = strtolower(pathinfo($path, PATHINFO_EXTENSION));
         @endphp
 
-        <div class="page-break"></div> {{-- Pindah Halaman --}}
-        
-        <div class="header" style="margin-top: 30px;">
-            <h3>LAMPIRAN SURAT</h3>
-        </div>
-
-        <div class="lampiran-container">
-            @if(in_array(strtolower($extension), ['jpg', 'jpeg', 'png']))
-                {{-- JIKA GAMBAR: TAMPILKAN LANGSUNG --}}
+        {{-- JIKA GAMBAR: Tampilkan lewat View ini --}}
+        @if(in_array($extension, ['jpg', 'jpeg', 'png', 'bmp']))
+            <div class="page-break"></div> 
+            <div class="header" style="margin-top: 30px;">
+                <h3>LAMPIRAN SURAT</h3>
+            </div>
+            <div class="lampiran-wrapper">
                 <img src="{{ $path }}" class="lampiran-img" alt="Lampiran Surat">
-            
-            @elseif(strtolower($extension) == 'pdf')
-                {{-- JIKA PDF: TAMPILKAN INFO --}}
-                <div class="lampiran-note">
-                    <h3>Lampiran Berupa Dokumen PDF</h3>
-                    <p>File surat ini adalah dokumen PDF.</p>
-                    <p>
-                        Mohon unduh file asli untuk melihat isinya secara lengkap.<br>
-                        (Dompdf tidak dapat menampilkan file PDF di dalam PDF lain secara otomatis)
-                    </p>
-                    <br>
-                    <p><strong>Nama File:</strong> {{ basename($surat->file_surat) }}</p>
-                </div>
-            @endif
-        </div>
+            </div>
+        
+        {{-- JIKA PDF: Controller akan menanganinya (Disini dikosongi agar tidak error) --}}
+        @elseif($extension == 'pdf')
+            {{-- Biarkan kosong, Controller yang akan menggabungkan file PDF --}}
+        @endif
     @endif
 
 </body>

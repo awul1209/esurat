@@ -39,8 +39,8 @@
     $routeBatal = ($tipe == 'eksternal') ? route('bau.surat-keluar.eksternal') : route('bau.surat-keluar.internal');
 @endphp
 
-<div class="container-fluid px-4">
-    <div class="card shadow-sm border-0 mb-4 mt-4">
+<div class="container-fluid px-3">
+    <div class="card shadow-sm border-0 mb-4 mt-2">
         <div class="card-header py-3 bg-light border-0">
             <h6 class="m-0 fw-bold text-primary">
                 <i class="bi bi-send-plus-fill me-2"></i>Buat Surat Keluar {{ $labelTipe }} (BAU)

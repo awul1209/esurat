@@ -71,7 +71,7 @@ class DashboardController extends Controller
             
             // Logika Pengirim
             if ($tipeLabel == 'internal' && $item instanceof SuratKeluar) {
-                 $pengirim = $item->user->satker->nama_satker ?? 'Internal Satker';
+                 $pengirim = $item->user->satker->nama_satker ?? 'Rektorat';
                  
                  // KHUSUS INTERNAL OTOMATIS: Tanggal Terima diambil dari created_at (Sesuai Request)
                  $tglTerima = Carbon::parse($item->created_at);

@@ -46,7 +46,7 @@
     $routeFilter = $isEksternal ? route('bau.surat-keluar.eksternal') : route('bau.surat-keluar.internal');
 @endphp
 
-<div class="container-fluid px-4">
+<div class="container-fluid px-3">
 
     {{-- ALERT MESSAGES --}}
     @if (session('success'))
