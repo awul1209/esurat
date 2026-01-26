@@ -49,12 +49,15 @@ Route::get('/home', [HomeController::class, 'index'])->name('home');
 // GRUP UTAMA: SEMUA RUTE YANG MEMERLUKAN LOGIN
 // ===================================================================
 Route::middleware('auth')->group(function () {
-
+// Gunakan {id} agar cocok dengan isi parameter di Controller
+Route::get('/cetak/disposisi-satker/{id}', [CetakController::class, 'cetakDisposisiSatker'])
+    ->name('cetak.disposisi.satker');
     // Rute Profil & Cetak
     Route::get('/profil', [ProfileController::class, 'edit'])->name('profil.edit');
     Route::put('/profil', [ProfileController::class, 'update'])->name('profil.update');
     Route::get('/cetak/disposisi/{surat}', [CetakController::class, 'cetakDisposisi'])
         ->name('cetak.disposisi');
+
 
 
     // --- GRUP UNTUK ADMIN BAU ---

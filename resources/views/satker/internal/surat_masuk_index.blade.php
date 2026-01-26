@@ -232,7 +232,124 @@
         @endif
     </td>
 
+    {{-- KOLOM AKSI (SATKER INTERNAL) --}}
+<!-- <td class="text-center">
+    <div class="d-flex justify-content-center gap-1">
+        
+        @php
+            // 1. Ambil semua riwayat aksi yang dilakukan oleh user (Admin Satker) ini
+            $myRiwayats = $surat->riwayats->where('user_id', Auth::id());
+
+            // 2. Cek apakah sudah diproses (Disposisi atau Informasi)
+            $isAlreadyProcessed = $myRiwayats->filter(function($r) {
+                $aksi = strtolower($r->status_aksi);
+                return str_contains($aksi, 'disposisi') || str_contains($aksi, 'informasi');
+            })->isNotEmpty();
+
+            // 3. LOGIKA KHUSUS CETAK: Cek apakah ada riwayat yang bertipe "Disposisi" 
+            // DAN memiliki penerima_id (artinya didelegasikan ke pegawai tertentu)
+            $isDelegatedToStaff = $myRiwayats->filter(function($r) {
+                return str_contains(strtolower($r->status_aksi), 'disposisi') && !empty($r->penerima_id);
+            })->isNotEmpty();
+
+            // 4. Data log untuk preview modal
+            $logDisposisi = $myRiwayats->filter(function($r) {
+                return str_contains(strtolower($r->status_aksi), 'disposisi');
+            });
+
+            // 5. Cek riwayat dari Rektor
+            $hasRektorDisposisi = $surat->riwayats->filter(function($r) {
+                return $r->pengirim && $r->pengirim->role == 'admin_rektor';
+            })->isNotEmpty();
+        @endphp
+
+        {{-- 1. TOMBOL SHOW --}}
+        <button type="button" class="btn btn-info btn-sm text-white shadow-sm" 
+            data-bs-toggle="modal" data-bs-target="#filePreviewModal" 
+            data-title="{{ $surat->perihal }}"
+            data-file-url="{{ $surat->file_surat ? Storage::url($surat->file_surat) : '' }}"
+            data-delegasi-info="{{ $logDisposisi->pluck('penerima.name')->unique()->join(', ') }}"
+            data-instruksi="{{ $logDisposisi->last() ? $logDisposisi->last()->status_aksi : '' }}"
+            data-catatan="{{ $logDisposisi->last() ? $logDisposisi->last()->catatan : '' }}"
+            title="Lihat Detail">
+            <i class="bi bi-eye-fill"></i>
+        </button>
+
+        {{-- 2. TOMBOL LOG RIWAYAT --}}
+        <button type="button" class="btn btn-secondary btn-sm shadow-sm" 
+            data-bs-toggle="modal" data-bs-target="#riwayatModal" 
+            data-url="{{ route('satker.surat-masuk.internal.riwayat', $surat->id) }}"
+            title="Riwayat Surat">
+            <i class="bi bi-clock-history"></i>
+        </button>
+
+        {{-- 3. TOMBOL EDIT --}}
+        @if($surat->is_manual && $surat->user_id == Auth::id() && !$isAlreadyProcessed)
+            <button type="button" class="btn btn-warning btn-sm text-white shadow-sm btn-edit-manual"
+                data-bs-toggle="modal" data-bs-target="#editSuratModal"
+                data-id="{{ $surat->id }}"
+                data-nomor="{{ $surat->nomor_surat }}"
+                data-perihal="{{ $surat->perihal }}"
+                data-tanggal="{{ \Carbon\Carbon::parse($surat->tanggal_surat)->format('Y-m-d') }}"
+                data-satker="{{ $surat->surat_dari }}"
+                data-file-url="{{ $surat->file_surat ? Storage::url($surat->file_surat) : '' }}"
+                title="Edit Surat">
+                <i class="bi bi-pencil-fill"></i>
+            </button>
+        @endif
+
+        {{-- 4. TOMBOL HAPUS --}}
+        @if($surat->is_manual && $surat->user_id == Auth::id())
+            <form action="{{ route('satker.surat-masuk.internal.destroy', $surat->id) }}" method="POST" class="d-inline" onsubmit="return confirm('Pindahkan ke tempat sampah?');">
+                @csrf @method('DELETE')
+                <button type="submit" class="btn btn-danger btn-sm shadow-sm" title="Hapus">
+                    <i class="bi bi-trash-fill"></i>
+                </button>
+            </form>
+        @endif
+
+        {{-- 5. TOMBOL DISPOSISI & ARSIPKAN --}}
+        @if(!$isAlreadyProcessed && $surat->status != 'arsip_satker')
+            <button type="button" class="btn btn-primary btn-sm shadow-sm" 
+                data-bs-toggle="modal" data-bs-target="#delegasiModal" 
+                data-id="{{ $surat->id }}" 
+                data-perihal="{{ $surat->perihal }}" 
+                data-tabel="{{ $surat->is_manual ? 'surat' : 'surat_keluar' }}" 
+                title="Disposisikan">
+                <i class="bi bi-share-fill"></i>
+            </button>
+
+            @if(!$surat->is_manual)
+                <form action="{{ route('satker.surat-masuk.internal.arsipkan', $surat->id) }}" method="POST" class="d-inline" onsubmit="return confirm('Arsipkan surat ini?');">
+                    @csrf 
+                    <button type="submit" class="btn btn-success btn-sm shadow-sm" title="Terima & Arsipkan">
+                        <i class="bi bi-clipboard-check-fill"></i>
+                    </button>
+                </form>
+            @endif
+        @endif
+
+        {{-- 6. TOMBOL CETAK --}}
+        
+        {{-- Tombol Cetak Satker: Muncul HANYA jika didelegasikan ke pegawai (bukan informasi umum) --}}
+        @if($isDelegatedToStaff)
+            <a href="{{ route('cetak.disposisi.satker', $surat->id) }}" target="_blank" class="btn btn-dark btn-sm shadow-sm" title="Cetak Disposisi Satker">
+                <i class="bi bi-printer-fill"></i>
+            </a>
+        @endif
+
+        {{-- Tombol Cetak Rektor: Muncul jika ada riwayat disposisi dari rektor --}}
+        @if($hasRektorDisposisi)
+            <a href="{{ route('cetak.disposisi', $surat->id) }}" target="_blank" class="btn btn-outline-dark btn-sm shadow-sm" title="Cetak Disposisi Rektor">
+                <i class="bi bi-printer"></i>
+            </a>
+        @endif
+
+    </div>
+</td> -->
+
    {{-- KOLOM AKSI (SATKER INTERNAL) --}}
+    
 <td class="text-center">
     <div class="d-flex justify-content-center gap-1">
         
@@ -319,7 +436,7 @@
         @endif
 
     </div>
-</td>
+</td> 
 </tr>
 @endforeach
     </tbody>
