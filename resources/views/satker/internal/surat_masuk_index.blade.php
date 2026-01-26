@@ -188,7 +188,7 @@
 <tr>
     <td class="text-center fw-bold">{{ $loop->iteration }}</td>
     <td>
-        <span class="fw-bold text-dark">{{ $namaSatker }}</span><br>
+        <!-- <span class="fw-bold text-dark">{{ $namaSatker }}</span><br> -->
         <small class="text-muted"><i class="bi bi-person-circle"></i> {{ $penginput }}</small>
     </td>
     <td>
@@ -232,7 +232,7 @@
         @endif
     </td>
 
-    {{-- KOLOM AKSI (SATKER INTERNAL) --}}
+    {{-- KOLOM AKSI (SATKER INTERNAL) ini yang ada btn cetak disposisi satker --}}
 <!-- <td class="text-center">
     <div class="d-flex justify-content-center gap-1">
         
@@ -348,37 +348,43 @@
     </div>
 </td> -->
 
-   {{-- KOLOM AKSI (SATKER INTERNAL) --}}
+   {{-- KOLOM AKSI (SATKER INTERNAL) ini yang bug  surat keluar internal rektor tidak bisa didelegasi atau arsip --}}
     
-<td class="text-center">
+<!-- <td class="text-center">
     <div class="d-flex justify-content-center gap-1">
         
-        {{-- 1. TOMBOL SHOW (DETAIL/PREVIEW) --}}
+        {{-- Logika Pendeteksi Status --}}
         @php
-            // Cek apakah sudah ada proses Disposisi atau Informasi Umum oleh Admin Satker ini
-            $isAlreadyProcessed = $surat->riwayats->where('user_id', Auth::id())->filter(function($r) {
+            $myRiwayats = $surat->riwayats->where('user_id', Auth::id());
+            
+            // 1. Cek apakah di riwayat sudah ada aksi 'Arsip', 'Disposisi', atau 'Selesai'
+            $isAlreadyProcessed = $myRiwayats->filter(function($r) {
                 $aksi = strtolower($r->status_aksi);
-                return str_contains($aksi, 'disposisi') || str_contains($aksi, 'informasi');
+                return str_contains($aksi, 'disposisi') || 
+                       str_contains($aksi, 'informasi') || 
+                       str_contains($aksi, 'arsip') || 
+                       str_contains($aksi, 'selesai');
             })->isNotEmpty();
 
-            // Ambil data log untuk preview (khusus disposisi)
-            $logDisposisi = $surat->riwayats->where('user_id', Auth::id())->filter(function($r) {
-                return str_contains(strtolower($r->status_aksi), 'disposisi');
-            });
+            // 2. Cek status surat dari tabel induk (surats / surat_keluars)
+            // Pastikan mengecek status 'selesai' atau 'arsip_satker'
+            $isStatusArchived = in_array(strtolower($surat->status), ['arsip_satker', 'selesai', 'arsip']);
         @endphp
 
-        <button type="button" class="btn btn-info btn-sm text-white shadow-sm" 
-            data-bs-toggle="modal" data-bs-target="#filePreviewModal" 
-            data-title="{{ $surat->perihal }}"
-            data-file-url="{{ $surat->file_surat ? Storage::url($surat->file_surat) : '' }}"
-            data-delegasi-info="{{ $logDisposisi->pluck('penerima.name')->join(', ') }}"
-            data-instruksi="{{ $logDisposisi->last() ? $logDisposisi->last()->status_aksi : '' }}"
-            data-catatan="{{ $logDisposisi->last() ? $logDisposisi->last()->catatan : '' }}"
-            title="Lihat Detail">
-            <i class="bi bi-eye-fill"></i>
-        </button>
+        {{-- 1. TOMBOL SHOW (Selalu Muncul) --}}
+<button type="button" class="btn btn-info btn-sm text-white shadow-sm" 
+    data-bs-toggle="modal" data-bs-target="#filePreviewModal" 
+    data-title="{{ $surat->perihal }}"
+    data-file-url="{{ $surat->file_surat ? Storage::url($surat->file_surat) : '' }}"
+    {{-- Tambahkan Baris di Bawah Ini --}}
+    data-delegasi-info="{{ $logDisposisi->pluck('penerima.name')->unique()->join(', ') }}"
+    data-instruksi="{{ $logDisposisi->last() ? $logDisposisi->last()->status_aksi : '' }}"
+    data-catatan="{{ $logDisposisi->last() ? $logDisposisi->last()->catatan : '' }}"
+    title="Lihat Detail">
+    <i class="bi bi-eye-fill"></i>
+</button>
 
-        {{-- 2. TOMBOL LOG RIWAYAT --}}
+        {{-- 2. TOMBOL LOG RIWAYAT (Selalu Muncul) --}}
         <button type="button" class="btn btn-secondary btn-sm shadow-sm" 
             data-bs-toggle="modal" data-bs-target="#riwayatModal" 
             data-url="{{ route('satker.surat-masuk.internal.riwayat', $surat->id) }}"
@@ -386,35 +392,10 @@
             <i class="bi bi-clock-history"></i>
         </button>
 
-        {{-- 3. TOMBOL EDIT (Hanya muncul jika MANUAL dan BELUM diproses) --}}
-        @if($surat->is_manual && $surat->user_id == Auth::id() && !$isAlreadyProcessed)
-<button type="button" class="btn btn-warning btn-sm text-white shadow-sm btn-edit-manual"
-    data-bs-toggle="modal" 
-    data-bs-target="#editSuratModal"
-    data-id="{{ $surat->id }}"
-    data-nomor="{{ $surat->nomor_surat }}"
-    data-perihal="{{ $surat->perihal }}"
-    data-tanggal="{{ \Carbon\Carbon::parse($surat->tanggal_surat)->format('Y-m-d') }}"
-    data-satker="{{ $surat->surat_dari }}" {{-- Ini kunci agar asal satker muncul --}}
-    data-file-url="{{ $surat->file_surat ? Storage::url($surat->file_surat) : '' }}"
-    title="Edit Surat">
-    <i class="bi bi-pencil-fill"></i>
-</button>
-        @endif
-
-        {{-- 4. TOMBOL HAPUS (Khusus Manual milik sendiri) --}}
-        @if($surat->is_manual && $surat->user_id == Auth::id())
-            <form action="{{ route('satker.surat-masuk.internal.destroy', $surat->id) }}" method="POST" class="d-inline" onsubmit="return confirm('Pindahkan ke tempat sampah?');">
-                @csrf @method('DELETE')
-                <button type="submit" class="btn btn-danger btn-sm shadow-sm" title="Hapus">
-                    <i class="bi bi-trash-fill"></i>
-                </button>
-            </form>
-        @endif
-
-        {{-- 5. TOMBOL DISPOSISI & ARSIPKAN (Hanya muncul jika BELUM diproses sama sekali) --}}
-        @if(!$isAlreadyProcessed && $surat->status != 'arsip_satker')
-            {{-- Tombol Disposisi --}}
+        {{-- 3. LOGIKA TOMBOL PROSES (HANYA MUNCUL JIKA BELUM DIPROSES & STATUS BUKAN ARSIP) --}}
+        @if(!$isAlreadyProcessed && !$isStatusArchived)
+            
+            {{-- Tombol Disposisi/Delegasi --}}
             <button type="button" class="btn btn-primary btn-sm shadow-sm" 
                 data-bs-toggle="modal" data-bs-target="#delegasiModal" 
                 data-id="{{ $surat->id }}" 
@@ -424,19 +405,118 @@
                 <i class="bi bi-share-fill"></i>
             </button>
 
-            {{-- Form Arsipkan (Hanya untuk surat dari sistem/bukan manual) --}}
+            {{-- Tombol Arsipkan (Hanya untuk surat masuk dari sistem/satker lain) --}}
             @if(!$surat->is_manual)
-                <form action="{{ route('satker.surat-masuk.internal.arsipkan', $surat->id) }}" method="POST" onsubmit="return confirm('Arsipkan surat ini?');">
+                <form action="{{ route('satker.surat-masuk.internal.arsipkan', $surat->id) }}" method="POST" class="d-inline" onsubmit="return confirm('Arsipkan surat ini?');">
                     @csrf 
                     <button type="submit" class="btn btn-success btn-sm shadow-sm" title="Terima & Arsipkan">
                         <i class="bi bi-clipboard-check-fill"></i>
                     </button>
                 </form>
             @endif
+
+        @endif
+
+        {{-- 4. TOMBOL CETAK (Muncul jika sudah didelegasikan) --}}
+        @if($isAlreadyProcessed)
+            <a href="{{ route('cetak.disposisi.satker', $surat->id) }}" target="_blank" class="btn btn-dark btn-sm shadow-sm" title="Cetak Disposisi Satker">
+                <i class="bi bi-printer-fill"></i>
+            </a>
         @endif
 
     </div>
-</td> 
+</td> -->
+   {{-- KOLOM AKSI (SATKER INTERNAL)  --}}
+    
+<td class="text-center">
+    <div class="d-flex justify-content-center gap-1">
+        
+        {{-- Logika Pendeteksi Status --}}
+       @php
+    // 1. Ambil riwayat aksi milik Admin Satker yang sedang login
+    $myRiwayats = $surat->riwayats->where('user_id', Auth::id());
+    
+    // 2. Cek apakah sudah pernah diproses oleh user ini (Disposisi/Arsip)
+    $isAlreadyProcessed = $myRiwayats->filter(function($r) {
+        $aksi = strtolower($r->status_aksi);
+        return str_contains($aksi, 'disposisi') || 
+               str_contains($aksi, 'informasi') || 
+               str_contains($aksi, 'arsip') || 
+               str_contains($aksi, 'selesai');
+    })->isNotEmpty();
+
+    // 3. Ambil status global dari tabel induk (surats atau surat_keluars)
+    $isStatusArchived = in_array(strtolower($surat->status), ['arsip_satker', 'selesai', 'arsip']);
+
+    // ========================================================================
+    // LOGIKA TAMBAHAN UNTUK MENANGANI BUG SURAT REKTOR -> BAU -> SATKER
+    // ========================================================================
+    // Ambil data pivot khusus untuk Satker yang sedang login
+    $myPivot = $surat->penerimaInternal->where('id', Auth::user()->satker_id)->first();
+
+    // Jika status global 'selesai' TAPI di tabel pivot kita is_read-nya masih 0,
+    // maka kita PAKSA variabel $isStatusArchived menjadi false agar tombol tetap muncul.
+    if ($isStatusArchived && $myPivot && $myPivot->pivot->is_read == 0) {
+        $isStatusArchived = false;
+    }
+    // ========================================================================
+@endphp
+
+        {{-- 1. TOMBOL SHOW (Selalu Muncul) --}}
+<button type="button" class="btn btn-info btn-sm text-white shadow-sm" 
+    data-bs-toggle="modal" data-bs-target="#filePreviewModal" 
+    data-title="{{ $surat->perihal }}"
+    data-file-url="{{ $surat->file_surat ? Storage::url($surat->file_surat) : '' }}"
+    {{-- Tambahkan Baris di Bawah Ini --}}
+    data-delegasi-info="{{ $logDisposisi->pluck('penerima.name')->unique()->join(', ') }}"
+    data-instruksi="{{ $logDisposisi->last() ? $logDisposisi->last()->status_aksi : '' }}"
+    data-catatan="{{ $logDisposisi->last() ? $logDisposisi->last()->catatan : '' }}"
+    title="Lihat Detail">
+    <i class="bi bi-eye-fill"></i>
+</button>
+
+        {{-- 2. TOMBOL LOG RIWAYAT (Selalu Muncul) --}}
+        <button type="button" class="btn btn-secondary btn-sm shadow-sm" 
+            data-bs-toggle="modal" data-bs-target="#riwayatModal" 
+            data-url="{{ route('satker.surat-masuk.internal.riwayat', $surat->id) }}"
+            title="Riwayat Surat">
+            <i class="bi bi-clock-history"></i>
+        </button>
+
+        {{-- 3. LOGIKA TOMBOL PROSES (HANYA MUNCUL JIKA BELUM DIPROSES & STATUS BUKAN ARSIP) --}}
+        @if(!$isAlreadyProcessed && !$isStatusArchived)
+            
+            {{-- Tombol Disposisi/Delegasi --}}
+            <button type="button" class="btn btn-primary btn-sm shadow-sm" 
+                data-bs-toggle="modal" data-bs-target="#delegasiModal" 
+                data-id="{{ $surat->id }}" 
+                data-perihal="{{ $surat->perihal }}" 
+                data-tabel="{{ $surat->is_manual ? 'surat' : 'surat_keluar' }}" 
+                title="Disposisikan">
+                <i class="bi bi-share-fill"></i>
+            </button>
+
+            {{-- Tombol Arsipkan (Hanya untuk surat masuk dari sistem/satker lain) --}}
+            @if(!$surat->is_manual)
+                <form action="{{ route('satker.surat-masuk.internal.arsipkan', $surat->id) }}" method="POST" class="d-inline" onsubmit="return confirm('Arsipkan surat ini?');">
+                    @csrf 
+                    <button type="submit" class="btn btn-success btn-sm shadow-sm" title="Terima & Arsipkan">
+                        <i class="bi bi-clipboard-check-fill"></i>
+                    </button>
+                </form>
+            @endif
+
+        @endif
+
+        {{-- 4. TOMBOL CETAK (Muncul jika sudah didelegasikan) --}}
+        @if($isAlreadyProcessed)
+            <!-- <a href="{{ route('cetak.disposisi.satker', $surat->id) }}" target="_blank" class="btn btn-dark btn-sm shadow-sm" title="Cetak Disposisi Satker">
+                <i class="bi bi-printer-fill"></i>
+            </a> -->
+        @endif
+
+    </div>
+</td>
 </tr>
 @endforeach
     </tbody>
@@ -785,12 +865,14 @@
 
       
 
-       var fileModal = document.getElementById('filePreviewModal');
+var fileModal = document.getElementById('filePreviewModal');
 if (fileModal) {
     fileModal.addEventListener('show.bs.modal', function (event) {
         var button = event.relatedTarget;
         var fileUrl = button.getAttribute('data-file-url');
         var title = button.getAttribute('data-title');
+        
+        // Ambil data delegasi yang baru saja kita tambahkan di tombol
         var delegasiInfo = button.getAttribute('data-delegasi-info');
         var instruksi = button.getAttribute('data-instruksi');
         var catatan = button.getAttribute('data-catatan');
@@ -798,42 +880,38 @@ if (fileModal) {
         fileModal.querySelector('.modal-title').textContent = "Detail Surat: " + title;
         fileModal.querySelector('#btn-download-file').href = fileUrl;
         
-        // --- LOGIKA PANEL DISPOSISI ---
         var panelDisposisi = fileModal.querySelector('#disposisi-panel');
         var containerFile = fileModal.querySelector('#file-viewer-container').parentElement;
 
-        if (delegasiInfo && delegasiInfo.trim() !== "") {
-            // Jika ada info delegasi (Disposisi), tampilkan panel kanan
+        // Cek apakah ada data delegasi (Jika surat didelegasikan ke pegawai tertentu)
+        if (delegasiInfo && delegasiInfo.trim() !== "" && delegasiInfo !== "null") {
             panelDisposisi.style.display = 'block';
-            containerFile.className = "col-lg-8 border-end"; // Perkecil container file
+            containerFile.className = "col-lg-8 border-end"; 
             
-            fileModal.querySelector('#display-penerima').textContent = delegasiInfo;
+            // Isi konten detail
+            fileModal.querySelector('#display-penerima').innerHTML = '<i class="bi bi-people me-2"></i>' + delegasiInfo;
             fileModal.querySelector('#display-instruksi').textContent = instruksi || '-';
             fileModal.querySelector('#display-catatan').textContent = catatan || 'Tidak ada catatan khusus.';
         } else {
-            // Jika Sebar Semua / Tidak ada delegasi, sembunyikan panel kanan
+            // Jika surat hanya sebar semua / informasi umum (tanpa delegasi spesifik)
             panelDisposisi.style.display = 'none';
-            containerFile.className = "col-lg-12"; // Perlebar container file
+            containerFile.className = "col-lg-12"; 
         }
 
-        // --- LOGIKA FILE PREVIEW (Tetap sama) ---
-        var filename = fileUrl.split('/').pop();
-        var previewFilenameEl = fileModal.querySelector('#preview-filename');
-        if(previewFilenameEl) previewFilenameEl.textContent = filename;
-        
+        // --- PREVIEW FILE ---
         var container = fileModal.querySelector('#file-viewer-container');
-        container.innerHTML = '<div class="spinner-border text-primary"></div>';
+        container.innerHTML = '<div class="text-white"><div class="spinner-border text-primary me-2"></div> Memuat file...</div>';
 
         var ext = fileUrl.split('.').pop().toLowerCase().split('?')[0];
         setTimeout(function() {
             if (ext === 'pdf') {
                 container.innerHTML = `<iframe src="${fileUrl}#toolbar=0" width="100%" height="100%" style="border:none;"></iframe>`;
-            } else if (['jpg', 'jpeg', 'png'].includes(ext)) {
+            } else if (['jpg', 'jpeg', 'png', 'gif'].includes(ext)) {
                 container.innerHTML = `<img src="${fileUrl}" class="img-fluid" style="max-height: 100%; object-fit: contain;">`;
             } else {
-                container.innerHTML = `<div class="text-white text-center p-5"><i class="bi bi-file-earmark-x fs-1"></i><br>Preview tidak tersedia untuk tipe file ini.</div>`;
+                container.innerHTML = `<div class="text-white text-center p-5"><i class="bi bi-file-earmark-x fs-1"></i><br>Preview tidak tersedia.</div>`;
             }
-        }, 300);
+        }, 400);
     });
 }
         

@@ -74,71 +74,88 @@ class ArsipSuratRektorController extends Controller
      * Tampilkan Daftar Arsip Internal (Status: Selesai)
      * (Untuk tahap selanjutnya setelah fitur Internal aktif)
      */
-    public function internal(Request $request)
-    {
-        $query = SuratKeluar::with(['user', 'penerimaInternal'])
-            ->whereHas('user', function($q) {
-                $q->where('role', 'admin_rektor');
-            })
-            ->where('tipe_kirim', 'internal')
-            ->where('status', 'selesai'); // Filter hanya yang sudah selesai/diteruskan
+   public function internal(Request $request)
+{
+    // Eager load penerimaInternal (Satker) dan riwayats.penerima (Pegawai)
+    $query = \App\Models\SuratKeluar::with(['user', 'penerimaInternal', 'riwayats.penerima'])
+        ->whereHas('user', function($q) {
+            $q->where('role', 'admin_rektor');
+        })
+        ->where('tipe_kirim', 'internal')
+        ->where('status', 'selesai');
 
-        // Filter Tanggal
-        if ($request->filled('start_date') && $request->filled('end_date')) {
-            $query->whereBetween('tanggal_terusan', [$request->start_date . ' 00:00:00', $request->end_date . ' 23:59:59']);
-        }
-
-       $arsip = $query->orderByRaw('COALESCE(tanggal_terusan, created_at) DESC')->get();
-
-        return view('bau.arsip_rektor.internal', compact('arsip'));
+    // Filter Tanggal berdasarkan tanggal_terusan (kapan BAU memprosesnya)
+    if ($request->filled('start_date') && $request->filled('end_date')) {
+        $query->whereBetween('tanggal_terusan', [
+            $request->start_date . ' 00:00:00', 
+            $request->end_date . ' 23:59:59'
+        ]);
     }
 
-    public function exportInternal(Request $request)
+    // Urutkan berdasarkan tanggal terusan terbaru
+    $arsip = $query->orderByRaw('COALESCE(tanggal_terusan, created_at) DESC')->get();
+
+    return view('bau.arsip_rektor.internal', compact('arsip'));
+}
+ public function exportInternal(Request $request)
 {
-    // 1. Ambil Data dengan Filter
-    $query = \App\Models\SuratKeluar::with(['penerimaInternal'])
+    // 1. Ambil Data dengan Filter Lengkap
+    $query = \App\Models\SuratKeluar::with(['penerimaInternal', 'riwayats.penerima'])
+        ->whereHas('user', function($q) {
+            $q->where('role', 'admin_rektor');
+        })
         ->where('tipe_kirim', 'internal')
         ->where('status', 'selesai');
 
     if ($request->filled('start_date') && $request->filled('end_date')) {
-        $query->whereBetween('tanggal_terusan', [$request->start_date . ' 00:00:00', $request->end_date . ' 23:59:59']);
+        $query->whereBetween('tanggal_terusan', [
+            $request->start_date . ' 00:00:00', 
+            $request->end_date . ' 23:59:59'
+        ]);
     }
 
     $data = $query->latest('tanggal_terusan')->get();
 
-    // 2. Persiapan Header File CSV (Agar Excel bisa baca formatnya dengan benar)
+    // 2. Persiapan Header
     $fileName = 'Arsip_Internal_Rektor_' . now()->format('Ymd_His') . '.csv';
-    
     $headers = [
-        "Content-type"        => "text/csv",
+        "Content-type"        => "text/csv; charset=UTF-8",
         "Content-Disposition" => "attachment; filename=$fileName",
         "Pragma"              => "no-cache",
         "Cache-Control"       => "must-revalidate, post-check=0, pre-check=0",
         "Expires"             => "0"
     ];
 
-    // 3. Proses Streaming Data
+    // 3. Proses Streaming
     $callback = function() use($data) {
         $file = fopen('php://output', 'w');
-        
-        // Tambahkan BOM agar karakter spesial/simbol terbaca benar di Excel
-        fprintf($file, chr(0xEF).chr(0xBB).chr(0xBF));
+        fprintf($file, chr(0xEF).chr(0xBB).chr(0xBF)); // BOM Fix untuk Excel
 
-        // Header Kolom
         fputcsv($file, [
             'No', 
             'Nomor Surat', 
             'Tanggal Surat', 
             'Perihal', 
-            'Tujuan Satker', 
+            'Tujuan (Satker/Pegawai)', 
             'Waktu Masuk (Rektor)', 
             'Waktu Selesai (BAU)'
         ]);
 
-        // Isi Data
         foreach ($data as $key => $row) {
-            // Gabungkan Nama Satker menjadi satu string dipisah koma
-            $tujuan = $row->penerimaInternal->pluck('nama_satker')->implode(', ');
+            // LOGIKA TUJUAN HYBRID
+            $tujuan = '';
+            if ($row->penerimaInternal->isNotEmpty()) {
+                // Jika tujuan ke Satker
+                $tujuan = $row->penerimaInternal->pluck('nama_satker')->implode(', ');
+            } elseif ($row->riwayats->whereNotNull('penerima_id')->isNotEmpty()) {
+                // Jika tujuan langsung ke Pegawai (Direct)
+                $tujuan = $row->riwayats->whereNotNull('penerima_id')
+                            ->pluck('penerima.name')
+                            ->unique()
+                            ->implode(', ');
+            } else {
+                $tujuan = $row->tujuan_surat ?? '-';
+            }
 
             fputcsv($file, [
                 $key + 1,

@@ -52,7 +52,7 @@
         <div class="col-md-3 text-end">
             {{-- TOMBOL EXPORT --}}
             <button type="submit" formaction="{{ route('bau.arsip-rektor.internal.export') }}" class="btn btn-success btn-sm w-100">
-                <i class="bi bi-file-earmark-excel me-1"></i> Export ke Excel (.csv)
+                <i class="bi bi-file-earmark-excel me-1"></i> Export
             </button>
         </div>
     </div>

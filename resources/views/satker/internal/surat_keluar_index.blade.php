@@ -181,43 +181,44 @@
     <tr>
         <td class="text-center fw-bold">{{ $loop->iteration }}</td>
         
-        {{-- KOLOM TUJUAN (PERBAIKAN) --}}
-        <td>
-            <div class="d-flex flex-column gap-1">
-                {{-- 1. PRIORITAS UTAMA: JIKA KE ANTAR SATKER --}}
-                @if($isAntarSatker)
-                    @foreach($surat->penerimaInternal as $penerima)
-                        <span class="badge bg-light text-dark border text-start" style="width: fit-content; font-size: 11px;">
-                            <i class="bi bi-building me-1 text-success"></i> {{ $penerima->nama_satker }}
-                        </span>
-                    @endforeach
+       {{-- KOLOM TUJUAN (PERBAIKAN) --}}
+<td>
+    <div class="d-flex flex-column gap-1">
+        {{-- 1. PRIORITAS UTAMA: JIKA KE ANTAR SATKER --}}
+        @if($isAntarSatker)
+            @foreach($surat->penerimaInternal as $penerima)
+                <span class="badge bg-light text-dark border text-start" style="width: fit-content; font-size: 11px;">
+                    <i class="bi bi-building me-1 text-success"></i> {{ $penerima->nama_satker }}
+                </span>
+            @endforeach
 
-                {{-- 2. PRIORITAS KEDUA: JIKA KE REKTORAT / BAU --}}
-                @elseif($isKeRektorat)
-                    <div class="d-flex flex-column mb-1">
-                        <span class="fw-bold text-dark">{{ $surat->tujuan_surat }}</span>
-                        <span class="badge bg-light text-dark border text-start" style="width: fit-content; font-size: 10px;">
-                            <i class="bi bi-arrow-right-circle me-1 text-warning"></i> Via BAU
-                        </span>
-                    </div>
-
-                {{-- 3. PRIORITAS KETIGA: JIKA DIRECT KE PEGAWAI (BUKAN DELEGASI SATKER) --}}
-                @elseif($isKePegawaiDirect)
-                    @foreach($riwayatPegawai as $rp)
-                        <div class="d-flex flex-column mb-1">
-                            <span class="fw-bold text-dark">{{ $rp->penerima->name ?? 'User Tidak Ditemukan' }}</span>
-                            <span class="badge bg-light text-dark border text-start" style="width: fit-content; font-size: 10px;">
-                                <i class="bi bi-person me-1 text-primary"></i> Personal
-                            </span>
-                        </div>
-                    @endforeach
-
-                {{-- 4. JIKA TIDAK ADA SAMA SEKALI --}}
-                @else
-                    <span class="text-muted fst-italic">- Tidak ada tujuan -</span>
-                @endif
+        {{-- 2. PRIORITAS KEDUA: JIKA KE REKTORAT / BAU --}}
+        @elseif($isKeRektorat)
+            <div class="d-flex flex-column mb-1">
+                <span class="fw-bold text-dark">{{ $surat->tujuan_surat }}</span>
+                <span class="badge bg-light text-dark border text-start" style="width: fit-content; font-size: 10px;">
+                    <i class="bi bi-arrow-right-circle me-1 text-warning"></i> Via BAU
+                </span>
             </div>
-        </td>
+
+        {{-- 3. PRIORITAS KETIGA: JIKA DIRECT KE PEGAWAI (PERBAIKAN: LABEL PERSONAL DIGANTI NAMA) --}}
+        @elseif($isKePegawaiDirect)
+            @foreach($riwayatPegawai as $rp)
+                @php $namaPegawai = $rp->penerima->name ?? 'User Tidak Ditemukan'; @endphp
+                <div class="d-flex flex-column mb-1">
+                    <span class="fw-bold text-dark">{{ $namaPegawai }}</span>
+                    <span class="badge bg-light text-dark border text-start" style="width: fit-content; font-size: 10px;">
+                        <i class="bi bi-person me-1 text-primary"></i> {{ $namaPegawai }}
+                    </span>
+                </div>
+            @endforeach
+
+        {{-- 4. JIKA TIDAK ADA SAMA SEKALI --}}
+        @else
+            <span class="text-muted fst-italic">- Tidak ada tujuan -</span>
+        @endif
+    </div>
+</td>
 
         {{-- NO SURAT & PERIHAL --}}
         <td>

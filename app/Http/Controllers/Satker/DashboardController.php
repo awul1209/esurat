@@ -185,7 +185,7 @@ $formatData = function($item, $tipeLabel) use ($user) {
        $activityLogs = collect();
 
 // --- A. SURAT MASUK (5 Terakhir) ---
-$suratMasukRecent = $allSuratMasuk->sortByDesc('tgl_terima')->take(10);
+$suratMasukRecent = $allSuratMasuk->sortByDesc('tgl_terima')->take(20);
 
 foreach ($suratMasukRecent as $sm) {
     $url = $sm['tipe'] == 'Internal' ? route('satker.surat-masuk.internal') : route('satker.surat-masuk.eksternal');
@@ -400,7 +400,7 @@ if ($sm['tipe'] !== 'Eksternal') {
         }
 
         // C. Gabung & Sortir
-        $activityLogs = $activityLogs->sortByDesc('sort_date')->take(10);
+        $activityLogs = $activityLogs->sortByDesc('sort_date')->take(20);
 
         // ==========================================
         // 4. CHART DATA

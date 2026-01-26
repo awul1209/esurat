@@ -55,7 +55,7 @@ public function indexPribadiIntEks(Request $request)
         
         // Tentukan Tipe Label
         $item->tipe_label = ($item instanceof \App\Models\Surat) ? ucfirst($item->tipe_surat) : 'Internal';
-        $item->surat_dari_display = ($item instanceof \App\Models\Surat) ? $item->surat_dari : ($item->user->satker->nama_satker ?? 'Internal');
+        $item->surat_dari_display = ($item instanceof \App\Models\Surat) ? $item->surat_dari : ($item->user->satker->nama_satker ?? 'Rektorat');
         
         $item->riwayat_id = $log ? $log->id : null;
         $item->status_penerimaan = $log ? $log->is_read : 0; 

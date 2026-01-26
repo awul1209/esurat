@@ -380,7 +380,7 @@ if ($request->asal_tabel == 'surat_keluar') {
                 // 1. Logika Nama Tujuan
                 $tujuan = '-';
                 if (!empty($surat->tujuan_surat)) {
-                    $tujuan = $surat->tujuan_surat . ' (Via BAU)';
+                    $tujuan = $surat->tujuan_surat;
                 } elseif ($surat->penerimaInternal->count() > 0) {
                     // Ambil nama satker, pisahkan koma
                     $tujuan = $surat->penerimaInternal->pluck('nama_satker')->join(', ');
@@ -1096,6 +1096,9 @@ public function arsipkan($id)
         // updateExistingPivot(id_relasi, [data_baru])
         $surat->penerimaInternal()->updateExistingPivot($satkerSaya, [
             'is_read' => 2 // Kita set 2 sebagai kode "Diarsipkan"
+        ]);
+        $surat->update([
+            'status' => 'selesai'
         ]);
 
         return redirect()->back()->with('success', 'Surat berhasil diarsipkan dari inbox Satker Anda.');

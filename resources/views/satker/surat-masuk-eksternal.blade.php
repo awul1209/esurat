@@ -259,13 +259,51 @@
     <div class="d-flex justify-content-center gap-1">
         
         {{-- 1. TOMBOL LIHAT --}}
-        <button type="button" class="btn btn-sm btn-info text-white" 
-            title="Lihat Detail"
-            data-bs-toggle="modal" 
-            data-bs-target="#detailSuratModal"
-            {{-- ... data attributes lainnya ... --}}>
-            <i class="bi bi-eye-fill"></i>
-        </button>
+ @php
+    // 1. Ambil Catatan Rektor Utama (Sesuai logika lembar disposisi Anda)
+    // Pastikan variabel $surat->disposisis sudah di-load di Controller
+    $disposisiRektorPertama = $surat->disposisis->first();
+    $catatanRektorUtama = $disposisiRektorPertama->catatan_rektor ?? '-';
+
+    // 2. Logika Delegasi Satker ke Pegawai (Multi-Pegawai)
+    $allLogs = $surat->riwayats
+        ->where('user_id', Auth::id())
+        ->whereNotNull('penerima_id');
+
+    // Filter hanya aksi Disposisi/Delegasi (Bukan Informasi Umum/Arsip)
+    $filteredLogs = $allLogs->filter(function($log) {
+        $aksi = strtolower($log->status_aksi);
+        return (str_contains($aksi, 'disposisi') || str_contains($aksi, 'delegasi')) 
+               && !str_contains($aksi, 'informasi umum');
+    });
+
+    $namaPegawai = $filteredLogs->map(function($log) {
+        return $log->penerima->name ?? '-';
+    })->unique()->join(', ');
+
+    $lastLog = $filteredLogs->last();
+@endphp
+
+<button type="button" class="btn btn-sm btn-info text-white" 
+    title="Lihat Detail"
+    data-bs-toggle="modal" 
+    data-bs-target="#detailSuratModal"
+    data-perihal="{{ $surat->perihal }}"
+    data-no-agenda="{{ $surat->no_agenda }}"
+    data-nomor-surat="{{ $surat->nomor_surat }}"
+    data-asal-surat="{{ $surat->surat_dari }}"
+    data-tanggal-surat="{{ \Carbon\Carbon::parse($surat->tanggal_surat)->format('d/m/Y') }}"
+    data-tanggal-diterima="{{ \Carbon\Carbon::parse($surat->diterima_tanggal)->format('d/m/Y') }}"
+    data-file-url="{{ Storage::url($surat->file_surat) }}"
+    
+    {{-- SEKARANG SUDAH MENGAMBIL DARI RELASI DISPOSISI SEPERTI LEMBAR DISPOSISI --}}
+    data-catatan-rektor="{{ $catatanRektorUtama }}"
+    
+    data-delegasi-user="{{ $namaPegawai }}"
+    data-klasifikasi="{{ $lastLog ? $lastLog->status_aksi : '' }}"
+    data-catatan-satker="{{ $lastLog ? $lastLog->catatan : '-' }}">
+    <i class="bi bi-eye-fill"></i>
+</button>
 
         {{-- 2. TOMBOL LOG --}}
         @if ($myDisposisi || $isMyInput)
@@ -710,57 +748,74 @@
         });
 
         // Script Modal Detail
-        var detailModal = document.getElementById('detailSuratModal');
-        detailModal.addEventListener('show.bs.modal', function (event) {
-            var button = event.relatedTarget;
-            detailModal.querySelector('#modal-perihal').textContent = button.getAttribute('data-perihal');
-            detailModal.querySelector('#modal-no-agenda').textContent = button.getAttribute('data-no-agenda') || '-';
-            detailModal.querySelector('#modal-nomor-surat').textContent = button.getAttribute('data-nomor-surat');
-            detailModal.querySelector('#modal-asal-surat').textContent = button.getAttribute('data-asal-surat');
-            detailModal.querySelector('#modal-tanggal-surat').textContent = button.getAttribute('data-tanggal-surat');
-            detailModal.querySelector('#modal-tanggal-diterima').textContent = button.getAttribute('data-tanggal-diterima');
-            // LOGIKA DELEGASI SPESIFIK
-    var delegasiUser = button.getAttribute('data-delegasi-user');
-    var klasifikasi = button.getAttribute('data-klasifikasi');
-    var rowUser = detailModal.querySelector('#row-delegasi-user');
-    var rowKlas = detailModal.querySelector('#row-klasifikasi');
+       var detailModal = document.getElementById('detailSuratModal');
+if (detailModal) {
+    detailModal.addEventListener('show.bs.modal', function (event) {
+        var button = event.relatedTarget;
+        
+        // Data Dasar
+        detailModal.querySelector('#modal-perihal').textContent = button.getAttribute('data-perihal');
+        detailModal.querySelector('#modal-no-agenda').textContent = button.getAttribute('data-no-agenda') || '-';
+        detailModal.querySelector('#modal-nomor-surat').textContent = button.getAttribute('data-nomor-surat');
+        detailModal.querySelector('#modal-asal-surat').textContent = button.getAttribute('data-asal-surat');
+        detailModal.querySelector('#modal-tanggal-surat').textContent = button.getAttribute('data-tanggal-surat');
+        detailModal.querySelector('#modal-tanggal-diterima').textContent = button.getAttribute('data-tanggal-diterima');
 
-    if (delegasiUser && delegasiUser !== '') {
-        rowUser.style.display = 'table-row';
-        rowKlas.style.display = 'table-row';
-        detailModal.querySelector('#modal-delegasi-user').textContent = delegasiUser;
-        detailModal.querySelector('#modal-klasifikasi').textContent = klasifikasi.replace('Disposisi: ', '');
-    } else {
-        rowUser.style.display = 'none';
-        rowKlas.style.display = 'none';
-    }
+        // LOGIKA DELEGASI SPESIFIK
+        var delegasiUser = button.getAttribute('data-delegasi-user');
+        var klasifikasi = button.getAttribute('data-klasifikasi');
+        var catatanSatker = button.getAttribute('data-catatan-satker');
+        
+        var rowUser = detailModal.querySelector('#row-delegasi-user');
+        var rowKlas = detailModal.querySelector('#row-klasifikasi');
 
-    // Catatan Satker / Instruksi
-    var catatanSatker = button.getAttribute('data-catatan-satker');
-    detailModal.querySelector('#modal-catatan-satker').textContent = (catatanSatker && catatanSatker !== '-') ? catatanSatker : '-';
+        if (delegasiUser && delegasiUser.trim() !== "") {
+            // Tampilkan baris jika ada data delegasi
+            rowUser.style.display = 'table-row';
+            rowKlas.style.display = 'table-row';
             
-            var catatanRektor = button.getAttribute('data-catatan-rektor');
-            detailModal.querySelector('#modal-catatan-rektor').textContent = (catatanRektor && catatanRektor !== '-') ? catatanRektor : '(Tidak ada)';
+            detailModal.querySelector('#modal-delegasi-user').textContent = delegasiUser;
             
-   
+            // Hilangkan kata "Disposisi: " jika ada agar lebih bersih
+            var cleanKlasifikasi = klasifikasi ? klasifikasi.replace('Disposisi: ', '') : '-';
+            detailModal.querySelector('#modal-klasifikasi').textContent = cleanKlasifikasi;
+            
+            // Isi Instruksi/Catatan Satker
+            detailModal.querySelector('#modal-catatan-satker').textContent = (catatanSatker && catatanSatker !== '-') ? catatanSatker : 'Tidak ada instruksi khusus.';
+        } else {
+            // Sembunyikan jika tidak didelegasikan (Misal: hanya diarsipkan/disebar semua)
+            rowUser.style.display = 'none';
+            rowKlas.style.display = 'none';
+            detailModal.querySelector('#modal-catatan-satker').textContent = 'Surat tidak didelegasikan ke pegawai spesifik.';
+        }
 
-            var fileUrl = button.getAttribute('data-file-url');
-            detailModal.querySelector('#modal-download-button').href = fileUrl;
-            
-            var wrapper = detailModal.querySelector('#modal-file-preview-wrapper');
-            if(fileUrl && fileUrl.length > 5) {
-                var ext = fileUrl.split('.').pop().toLowerCase().split('?')[0]; 
+        // Catatan Rektor
+        var catatanRektor = button.getAttribute('data-catatan-rektor');
+        detailModal.querySelector('#modal-catatan-rektor').textContent = (catatanRektor && catatanRektor !== '-' && catatanRektor !== 'null') ? catatanRektor : '(Tidak ada)';
+
+        // Logika File Preview
+        var fileUrl = button.getAttribute('data-file-url');
+        detailModal.querySelector('#modal-download-button').href = fileUrl;
+        
+        var wrapper = detailModal.querySelector('#modal-file-preview-wrapper');
+        wrapper.innerHTML = '<div class="text-center p-5"><div class="spinner-border text-primary"></div></div>';
+
+        if(fileUrl && fileUrl.length > 5) {
+            var ext = fileUrl.split('.').pop().toLowerCase().split('?')[0]; 
+            setTimeout(function() {
                 if(ext === 'pdf'){
-                    wrapper.innerHTML = '<iframe src="'+fileUrl+'" width="100%" height="100%" frameborder="0"></iframe>';
+                    wrapper.innerHTML = '<iframe src="'+fileUrl+'#toolbar=0" width="100%" height="100%" frameborder="0"></iframe>';
                 } else if(['jpg', 'jpeg', 'png', 'gif'].includes(ext)) {
                     wrapper.innerHTML = '<img src="'+fileUrl+'" class="img-fluid" style="max-height: 100%; width: 100%; object-fit: contain;">';
                 } else {
-                    wrapper.innerHTML = '<div class="text-center p-5"><p class="mt-3">Preview tidak didukung.</p></div>';
+                    wrapper.innerHTML = '<div class="text-center p-5"><i class="bi bi-file-earmark-x fs-1"></i><p class="mt-3">Preview tidak didukung untuk tipe file ini.</p></div>';
                 }
-            } else {
-                 wrapper.innerHTML = '<div class="text-center p-5"><p class="mt-3">File tidak ditemukan.</p></div>';
-            }
-        });
+            }, 300);
+        } else {
+             wrapper.innerHTML = '<div class="text-center p-5"><p class="mt-3">File tidak tersedia.</p></div>';
+        }
+    });
+}
 
        // Script Modal Delegasi
 var delegasiModal = document.getElementById('delegasiModal');

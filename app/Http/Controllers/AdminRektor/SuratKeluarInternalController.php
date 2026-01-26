@@ -139,50 +139,69 @@ public function create()
 
 
     // Fungsi Export Excel (Stream)
-    public function export(Request $request)
-    {
-        $query = SuratKeluar::with(['penerimaInternal'])
-                    ->where('user_id', Auth::id())
-                    ->where('tipe_kirim', 'internal');
+   public function export(Request $request)
+{
+    // 1. Tambahkan eager loading 'riwayats.penerima' untuk mengambil data tujuan pegawai
+    $query = \App\Models\SuratKeluar::with(['penerimaInternal', 'riwayats.penerima'])
+                ->where('user_id', \Illuminate\Support\Facades\Auth::id())
+                ->where('tipe_kirim', 'internal');
 
-        if ($request->filled('start_date') && $request->filled('end_date')) {
-            $query->whereBetween('tanggal_surat', [$request->start_date, $request->end_date]);
-        }
-
-        $data = $query->latest()->get();
-        $fileName = 'Surat_Keluar_Internal_' . date('Y-m-d_H-i') . '.csv';
-
-        $headers = [
-            "Content-type" => "text/csv; charset=UTF-8",
-            "Content-Disposition" => "attachment; filename=$fileName",
-            "Pragma" => "no-cache",
-            "Cache-Control" => "must-revalidate, post-check=0, pre-check=0",
-            "Expires" => "0"
-        ];
-
-        $callback = function() use ($data) {
-            $file = fopen('php://output', 'w');
-            fprintf($file, chr(0xEF).chr(0xBB).chr(0xBF)); // BOM Fix
-            fputcsv($file, ['No', 'No Surat', 'Tanggal', 'Perihal', 'Tujuan Satker', 'File Link']);
-
-            foreach ($data as $index => $row) {
-                // Gabungkan nama satker tujuan dipisah koma
-                $tujuan = $row->penerimaInternal->pluck('nama_satker')->implode(', ');
-                
-                fputcsv($file, [
-                    $index + 1,
-                    $row->nomor_surat,
-                    $row->tanggal_surat->format('d-m-Y'),
-                    $row->perihal,
-                    $tujuan,
-                    url('storage/' . $row->file_surat)
-                ]);
-            }
-            fclose($file);
-        };
-
-        return response()->stream($callback, 200, $headers);
+    if ($request->filled('start_date') && $request->filled('end_date')) {
+        $query->whereBetween('tanggal_surat', [$request->start_date, $request->end_date]);
     }
+
+    $data = $query->latest()->get();
+    $fileName = 'Surat_Keluar_Internal_Rektor_' . date('Y-m-d_H-i') . '.csv';
+
+    $headers = [
+        "Content-type" => "text/csv; charset=UTF-8",
+        "Content-Disposition" => "attachment; filename=$fileName",
+        "Pragma" => "no-cache",
+        "Cache-Control" => "must-revalidate, post-check=0, pre-check=0",
+        "Expires" => "0"
+    ];
+
+    $callback = function() use ($data) {
+        $file = fopen('php://output', 'w');
+        fprintf($file, chr(0xEF).chr(0xBB).chr(0xBF)); // BOM Fix untuk Excel
+        fputcsv($file, ['No', 'No Surat', 'Tanggal', 'Perihal', 'Tujuan (Satker/Pegawai)', 'Status', 'File Link']);
+
+        foreach ($data as $index => $row) {
+            // 2. Logika Penentuan Tujuan yang Fleksibel
+            $tujuan = '';
+
+            // Cek jika tujuan ke Satker (Antar Satker)
+            if ($row->penerimaInternal->isNotEmpty()) {
+                $tujuan = $row->penerimaInternal->pluck('nama_satker')->implode(', ');
+            } 
+            // Cek jika tujuan langsung ke Pegawai (Direct/Personal) melalui riwayat_surats
+            elseif ($row->riwayats->whereNotNull('penerima_id')->isNotEmpty()) {
+                $tujuan = $row->riwayats->whereNotNull('penerima_id')
+                            ->pluck('penerima.name')
+                            ->unique()
+                            ->implode(', ');
+            } 
+            // Fallback ke tujuan_surat jika teks manual diisi
+            else {
+                $tujuan = $row->tujuan_surat ?? '-';
+            }
+            
+            fputcsv($file, [
+                $index + 1,
+                $row->nomor_surat,
+                // Gunakan Carbon parse jika kolom bukan objek date otomatis
+                \Carbon\Carbon::parse($row->tanggal_surat)->format('d-m-Y'),
+                $row->perihal,
+                $tujuan,
+                $row->status,
+                url('storage/' . $row->file_surat)
+            ]);
+        }
+        fclose($file);
+    };
+
+    return response()->stream($callback, 200, $headers);
+}
 
    
 
