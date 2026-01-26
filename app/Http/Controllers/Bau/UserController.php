@@ -1,6 +1,7 @@
 <?php
 
 namespace App\Http\Controllers\Bau;
+use Illuminate\Support\Facades\Auth;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
@@ -8,6 +9,8 @@ use App\Models\User;
 use App\Models\Satker;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
+use App\Imports\UsersImport;
+use Maatwebsite\Excel\Facades\Excel;
 
 class UserController extends Controller
 {
@@ -33,29 +36,32 @@ class UserController extends Controller
      * Menyimpan user baru ke database.
      */
   public function store(Request $request)
-    {
-        // 1. Validasi
-        $validated = $request->validate([
-            'name' => 'required|string|max:255',
-            'email' => 'required|string|email|max:255|unique:users,email',
-            'no_hp' => 'nullable|string|max:20', // <--- TAMBAHAN BARU
-            'password' => 'required|string|min:8|confirmed',
-            'role' => 'required|in:bau,admin_rektor,satker,pegawai',
-            'satker_id' => 'nullable|exists:satkers,id',
-        ]);
+{
+    // 1. Validasi
+    $validated = $request->validate([
+        'name'      => 'required|string|max:255',
+        'email'     => 'required|string|email|max:255|unique:users,email',
+        'email2'    => 'nullable|string|email|max:255|unique:users,email2', // <--- TAMBAHAN EMAIL 2
+        'no_hp'     => 'nullable|string|max:20',
+        'password'  => 'required|string|min:8|confirmed',
+        'role'      => 'required|in:bau,admin_rektor,satker,pegawai',
+        'satker_id' => 'nullable|exists:satkers,id',
+    ]);
 
-        // 2. Buat User
-        User::create([
-            'name' => $validated['name'],
-            'email' => $validated['email'],
-            'no_hp' => $validated['no_hp'], // <--- SIMPAN NO HP
-            'password' => Hash::make($validated['password']),
-            'role' => $validated['role'],
-            'satker_id' => $validated['satker_id'],
-        ]);
+    // 2. Buat User
+    User::create([
+        'name'      => $validated['name'],
+        'email'     => $validated['email'],
+        'email2'    => $validated['email2'], // <--- SIMPAN EMAIL 2
+        'no_hp'     => $validated['no_hp'],
+        'password'  => Hash::make($validated['password']),
+        'role'      => $validated['role'],
+        'satker_id' => $validated['satker_id'],
+    ]);
 
-        return redirect()->route('bau.manajemen-user.index')->with('success', 'User baru berhasil dibuat.');
-    }
+    return redirect()->route('bau.manajemen-user.index')
+                     ->with('success', 'User baru berhasil dibuat.');
+}
 
     /**
      * Menampilkan form untuk mengedit user.
@@ -70,7 +76,7 @@ class UserController extends Controller
     /**
      * Mengupdate data user di database.
      */
-  public function update(Request $request, User $manajemen_user)
+ public function update(Request $request, User $manajemen_user)
 {
     $user = $manajemen_user;
 
@@ -81,7 +87,12 @@ class UserController extends Controller
             'required', 'string', 'email', 'max:255',
             Rule::unique('users')->ignore($user->id),
         ],
-        // PERBAIKAN: Ubah max:20 jadi max:255 agar muat banyak nomor
+        // TAMBAHAN: Validasi Email 2 (Opsional tapi harus unik kecuali milik user ini sendiri)
+        'email2' => [
+            'nullable', 'string', 'email', 'max:255',
+            Rule::unique('users', 'email2')->ignore($user->id),
+        ],
+        // No HP tetap ada dengan max 255 sesuai keinginan Anda
         'no_hp' => 'nullable|string|max:255', 
         'password' => 'nullable|string|min:8|confirmed',
         'role' => 'required|in:bau,admin_rektor,satker,pegawai',
@@ -91,11 +102,12 @@ class UserController extends Controller
     // 2. Update data dasar
     $user->name = $validated['name'];
     $user->email = $validated['email'];
+    $user->email2 = $validated['email2']; // <--- SIMPAN PERUBAHAN EMAIL 2
     $user->no_hp = $validated['no_hp']; 
     $user->role = $validated['role'];
     $user->satker_id = $validated['satker_id'];
 
-    // 3. Cek jika password diisi
+    // 3. Cek jika password diisi (Hanya update jika admin mengetik password baru)
     if ($request->filled('password')) {
         $user->password = Hash::make($validated['password']);
     }
@@ -121,5 +133,26 @@ class UserController extends Controller
         $user->delete();
 
         return redirect()->route('bau.manajemen-user.index')->with('success', 'User "' . $userName . '" berhasil dihapus.');
+    }
+
+    /**
+     * Import user dari file Excel.
+     */
+// --- TAMBAHKAN METHOD IMPORT INI DI SINI ---
+    public function import(Request $request)
+    {
+        $request->validate([
+            'file_excel' => 'required|mimes:xlsx,xls,csv|max:2048'
+        ]);
+
+        try {
+            Excel::import(new UsersImport, $request->file('file_excel'));
+            
+            return redirect()->route('bau.manajemen-user.index')
+                             ->with('success', 'Data User berhasil diimport!');
+        } catch (\Exception $e) {
+            return redirect()->route('bau.manajemen-user.index')
+                             ->with('error', 'Gagal import data: ' . $e->getMessage());
+        }
     }
 }

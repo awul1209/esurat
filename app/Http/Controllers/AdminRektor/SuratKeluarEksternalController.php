@@ -41,65 +41,64 @@ class SuratKeluarEksternalController extends Controller
     /**
      * Menyimpan data surat ke database (Tanpa Notifikasi WA).
      */
-    public function store(Request $request)
-    {
-        // 1. Validasi Input
-        $request->validate([
-            'nomor_surat'   => 'required|string|max:255|unique:surat_keluars,nomor_surat',
-            'tanggal_surat' => 'required|date',
-            'perihal'       => 'required|string|max:255',
-            'tujuan_luar'   => 'required|string|max:255', // Input Manual
-            'file_surat'    => 'required|file|mimes:pdf,doc,docx,jpg,png|max:5120', // Maks 5MB
-        ], [
-            'nomor_surat.unique'   => 'Nomor surat ini sudah terdaftar. Harap gunakan nomor lain.',
-            'tujuan_luar.required' => 'Tujuan eksternal wajib diisi.',
-            'file_surat.max'       => 'Ukuran file maksimal 5MB.',
+ public function store(Request $request)
+{
+    $request->validate([
+        'nomor_surat'   => 'required|string|max:255|unique:surat_keluars,nomor_surat',
+        'tanggal_surat' => 'required|date',
+        'perihal'       => 'required|string|max:255',
+        'tujuan_luar'   => 'required|string|max:255',
+        'via'           => 'required|string',
+        'file_surat'    => 'required|file|mimes:pdf,doc,docx,jpg,png|max:5120',
+    ]);
+
+    DB::beginTransaction();
+    try {
+        $path = $request->file('file_surat')->store('sk_rektor_eksternal', 'public');
+
+        $surat = SuratKeluar::create([
+            'user_id'          => Auth::id(),
+            'nomor_surat'      => $request->nomor_surat,
+            'tanggal_surat'    => $request->tanggal_surat,
+            'perihal'          => $request->perihal,
+            'tujuan_luar'      => $request->tujuan_luar, 
+            'tipe_kirim'       => 'eksternal',
+            'file_surat'       => $path,
+            'status'           => 'pending', 
+            'via'              => $request->via,
         ]);
 
-        $user = Auth::user();
+        // =========================================================
+        // NOTIFIKASI EMAIL KE BAU
+        // =========================================================
+        $bauUserIds = \App\Models\User::where('role', 'bau')->pluck('id')->toArray();
 
-        // Gunakan Transaction untuk keamanan data (File vs Database)
-        DB::beginTransaction();
-        try {
-            // 2. Upload File
-            $path = $request->file('file_surat')->store('surat_keluar_eksternal', 'public');
+        if (!empty($bauUserIds)) {
+            $details = [
+                'subject'    => '📄 Pengajuan Surat Eksternal Rektor: ' . $request->perihal,
+                'greeting'   => 'Yth. Tim BAU,',
+                'body'       => "Admin Rektorat telah mengajukan surat keluar eksternal baru yang memerlukan tindakan Anda untuk diteruskan ke pihak luar.\n\n" .
+                                "No. Surat: {$request->nomor_surat}\n" .
+                                "Tujuan: {$request->tujuan_luar}\n" .
+                                "Via: " . ucfirst($request->via) . "\n" .
+                                "Perihal: {$request->perihal}",
+                'actiontext' => 'Proses di BAU',
+                'actionurl'  => route('login'), // Arahkan ke dashboard BAU
+                'file_url'   => asset('storage/' . $path)
+            ];
 
-            // 3. Simpan Data Surat
-            SuratKeluar::create([
-                'user_id'          => $user->id,
-                'nomor_surat'      => $request->nomor_surat,
-                'tanggal_surat'    => $request->tanggal_surat,
-                'perihal'          => $request->perihal,
-                
-                // Simpan ke kolom tujuan manual
-                'tujuan_luar'      => $request->tujuan_luar, 
-                
-                // Tipe Eksternal & Satker ID Null
-                'tipe_kirim'       => 'eksternal',           
-                'tujuan_satker_id' => null, 
-                
-                'file_surat'       => $path,
-                'status'           => 'terkirim', // Status default
-            ]);
-
-            // TIDAK ADA LOGIKA WA DI SINI (Sesuai Request)
-
-            DB::commit();
-            
-            // Redirect kembali ke index dengan pesan sukses
-            return redirect()->route('adminrektor.surat-keluar-eksternal.index')
-                             ->with('success', 'Surat eksternal berhasil disimpan.');
-
-        } catch (\Exception $e) {
-            DB::rollBack();
-            // Hapus file jika database gagal simpan (untuk kebersihan storage)
-            if (isset($path) && Storage::disk('public')->exists($path)) {
-                Storage::disk('public')->delete($path);
-            }
-            
-            return back()->with('error', 'Gagal menyimpan surat: ' . $e->getMessage())->withInput();
+            \App\Helpers\EmailHelper::kirimNotif($bauUserIds, $details);
         }
+        // =========================================================
+
+        DB::commit();
+        return redirect()->route('adminrektor.surat-keluar-eksternal.index')
+                         ->with('success', 'Surat berhasil diajukan ke BAU untuk diteruskan.');
+    } catch (\Exception $e) {
+        DB::rollBack();
+        return back()->with('error', 'Gagal: ' . $e->getMessage());
     }
+}
 
     /**
      * Menampilkan form edit.
@@ -222,4 +221,43 @@ class SuratKeluarEksternalController extends Controller
 
         return response()->stream($callback, 200, $headers);
     }
+
+    /**
+ * Mengambil data riwayat log untuk Modal di Rektor.
+ */
+public function getLog($id) {
+    $surat = SuratKeluar::with('user')->findOrFail($id);
+    $history = [];
+
+    // Step 1: Input
+    $history[] = [
+        'status_aksi' => 'Permohonan Dibuat',
+        'catatan'     => "Dikirim via: " . ($surat->via ?? '-'),
+        // Kita kirim string yang sudah diformat oleh Carbon
+        'tanggal_f'   => $surat->created_at->isoFormat('D MMMM Y, HH.mm') . ' WIB',
+        'user_name'   => $surat->user->name ?? 'Admin Rektor'
+    ];
+
+    // Step 2: Proses
+    if (in_array($surat->status, ['proses', 'selesai'])) {
+        $history[] = [
+            'status_aksi' => 'Diproses BAU',
+            'catatan'     => 'BAU sedang menyiapkan dokumen dan pengiriman.',
+            'tanggal_f'   => $surat->updated_at->isoFormat('D MMMM Y, HH.mm') . ' WIB',
+            'user_name'   => 'Admin BAU'
+        ];
+    }
+
+    // Step 3: Selesai
+    if ($surat->status == 'selesai') {
+        $history[] = [
+            'status_aksi' => 'Selesai / Diarsipkan',
+            'catatan'     => 'Surat sudah dikirim ke tujuan dan diarsipkan.',
+            'tanggal_f'   => $surat->updated_at->isoFormat('D MMMM Y, HH.mm') . ' WIB',
+            'user_name'   => 'Admin BAU'
+        ];
+    }
+
+    return response()->json(['riwayats' => $history]);
+}
 }

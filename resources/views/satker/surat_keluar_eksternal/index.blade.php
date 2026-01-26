@@ -154,20 +154,30 @@
                                 @endif
                             </td>
 
-                            {{-- AKSI --}}
-                            <td class="text-center">
-                                <div class="d-flex justify-content-center gap-2">
-                                    <a href="{{ route('satker.surat-keluar.eksternal.edit', $surat->id) }}" class="btn btn-sm btn-action btn-action-edit" title="Edit Data" style="color:white">
-                                        <i class="bi bi-pencil-fill small"></i>
-                                    </a>
-                                    <form action="{{ route('satker.surat-keluar.eksternal.destroy', $surat->id) }}" method="POST" class="d-inline" onsubmit="return confirm('Apakah Anda yakin ingin menghapus surat ini?');">
-                                        @csrf @method('DELETE')
-                                        <button type="submit" class="btn btn-sm btn-action btn-action-delete" title="Hapus Data" style="color:white">
-                                            <i class="bi bi-trash-fill small"></i>
-                                        </button>
-                                    </form>
-                                </div>
-                            </td>
+                           {{-- AKSI --}}
+<td class="text-center">
+    <div class="d-flex justify-content-center gap-2">
+        {{-- 1. TOMBOL EDIT: Hanya muncul jika belum dikunci/diproses --}}
+        {{-- Jika Anda tidak menggunakan variabel $isLocked di sini, Anda bisa menghapus @if nya --}}
+        @if(!($isLocked ?? false))
+            <a href="{{ route('satker.surat-keluar.eksternal.edit', $surat->id) }}" class="btn btn-sm btn-action btn-action-edit" title="Edit Data" style="color:white">
+                <i class="bi bi-pencil-fill small"></i>
+            </a>
+        @else
+            <button class="btn btn-sm btn-secondary shadow-sm" disabled title="Surat sudah diproses, tidak bisa diedit">
+                <i class="bi bi-lock-fill small"></i>
+            </button>
+        @endif
+
+        {{-- 2. TOMBOL HAPUS: Selalu muncul agar admin bisa membersihkan arsip --}}
+        <form action="{{ route('satker.surat-keluar.eksternal.destroy', $surat->id) }}" method="POST" class="d-inline" onsubmit="return confirm('Apakah Anda yakin ingin menghapus surat ini?');">
+            @csrf @method('DELETE')
+            <button type="submit" class="btn btn-sm btn-action btn-action-delete" title="Hapus Data" style="color:white">
+                <i class="bi bi-trash-fill small"></i>
+            </button>
+        </form>
+    </div>
+</td>
                         </tr>
                         @endforeach
                     </tbody>

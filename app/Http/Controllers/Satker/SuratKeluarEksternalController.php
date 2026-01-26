@@ -135,7 +135,7 @@ class SuratKeluarEksternalController extends Controller
     ]);
 
     $user = Auth::user();
-    $path = $request->file('file_surat')->store('surat-keluar', 'public');
+    $path = $request->file('file_surat')->store('surat_keluar_eksternal_satker', 'public');
 
     // 2. Simpan Data
     SuratKeluar::create([
@@ -191,11 +191,19 @@ class SuratKeluarEksternalController extends Controller
                          ->with('success', 'Data surat keluar eksternal berhasil diperbarui.');
     }
 
-    public function destroy(SuratKeluar $surat)
-    {
-        if ($surat->user_id != Auth::id()) abort(403);
-        if ($surat->file_surat) Storage::disk('public')->delete($surat->file_surat);
-        $surat->delete();
-        return redirect()->back()->with('success', 'Surat dihapus.');
+public function destroy(SuratKeluar $surat)
+{
+    // Pastikan hanya pemilik yang bisa menghapus
+    if ($surat->user_id != Auth::id()) {
+        abort(403, 'Anda tidak memiliki akses untuk menghapus surat ini.');
     }
+
+    // JANGAN hapus file_surat di sini agar bisa di-restore nanti oleh BAU.
+    // File hanya akan benar-benar dihapus jika dilakukan 'forceDelete' di TrashController.
+    
+    // Laravel otomatis merubah status menjadi soft delete karena Trait SoftDeletes sudah dipasang di Model
+    $surat->delete(); 
+
+    return redirect()->back()->with('success', 'Surat berhasil dipindahkan ke tempat sampah.');
+}
 }

@@ -38,7 +38,8 @@
                     <form action="{{ route('bau.surat-keluar.update', $suratKeluar->id) }}" method="POST" enctype="multipart/form-data">
                         @csrf
                         @method('PUT')
-                        
+                        {{-- Input Hidden ini sangat penting untuk validasi di Controller --}}
+    <input type="hidden" name="tipe_kirim" value="{{ $suratKeluar->tipe_kirim }}">
                         <h6 class="text-muted mb-3 fw-bold">Informasi Surat</h6>
 
                         <div class="row mb-3">
@@ -54,11 +55,25 @@
                             </div>
                         </div>
 
-                        <div class="mb-3">
-                            <label for="tujuan_surat" class="form-label">Tujuan Surat: <span class="text-danger">*</span></label>
-                            <input type="text" class="form-control @error('tujuan_surat') is-invalid @enderror" id="tujuan_surat" name="tujuan_surat" value="{{ old('tujuan_surat', $suratKeluar->tujuan_surat) }}" required>
-                            @error('tujuan_surat') <div class="invalid-feedback">{{ $message }}</div> @enderror
-                        </div>
+                       {{-- BAGIAN TUJUAN SURAT (Sesuai Tipe Kirim) --}}
+<div class="mb-3">
+        <label class="form-label small fw-bold">Tujuan Surat</label>
+        @if($suratKeluar->tipe_kirim == 'internal')
+            <select class="form-select @error('tujuan_surat_id') is-invalid @enderror" name="tujuan_surat_id" required>
+                @foreach($daftarSatker as $satker)
+                    <option value="{{ $satker->id }}" 
+                        {{ (old('tujuan_surat_id') ?? ($suratKeluar->penerimaInternal->first()->id ?? '')) == $satker->id ? 'selected' : '' }}>
+                        {{ $satker->nama_satker }}
+                    </option>
+                @endforeach
+            </select>
+            @error('tujuan_surat_id') <div class="invalid-feedback">{{ $message }}</div> @enderror
+        @else
+            <input type="text" name="tujuan_surat" class="form-control @error('tujuan_surat') is-invalid @enderror" value="{{ old('tujuan_surat') ?? $suratKeluar->tujuan_surat }}" required>
+            @error('tujuan_surat') <div class="invalid-feedback">{{ $message }}</div> @enderror
+        @endif
+    </div>
+
 
                         <div class="mb-3">
                             <label for="perihal" class="form-label">Perihal: <span class="text-danger">*</span></label>

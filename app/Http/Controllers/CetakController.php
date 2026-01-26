@@ -12,6 +12,7 @@ class CetakController extends Controller
 {
   // JANGAN LUPA: Tambahkan 'use setasign\Fpdi\Fpdi;' di paling atas file controller
 
+//   cetak disposisi dari rektor
     public function cetakDisposisi(Surat $surat)
     {
         // 1. Keamanan

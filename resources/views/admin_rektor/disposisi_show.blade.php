@@ -89,6 +89,10 @@
                             <td>: {{ $surat->perihal }}</td>
                         </tr>
                         <tr>
+                            <td><strong>Tanggal Surat</strong></td>
+                            <td>: {{ $surat->tanggal_surat->isoFormat('D MMMM YYYY') }}</td>
+                        </tr>
+                        <tr>
                             <td><strong>Tanggal Diterima</strong></td>
                             <td>: {{ $surat->diterima_tanggal->isoFormat('D MMMM YYYY') }}</td>
                         </tr>
@@ -149,19 +153,59 @@
                         
                         @if($tipe == 'rektor')
                             {{-- KASUS 1: TUJUAN REKTOR (Langsung Selesai) --}}
-                            <div class="alert alert-info py-4 mb-4 text-center">
-                                <i class="bi bi-info-circle-fill h1 d-block mb-3 text-primary"></i>
-                                <h6 class="fw-bold">Surat untuk Rektor</h6>
-                                <p class="mb-0 small text-muted">Surat ini ditujukan personal kepada Rektor. Tidak memerlukan disposisi ke unit lain.</p>
-                                <hr class="my-3">
-                                <p class="mb-0 fw-bold">Klik tombol di bawah untuk menandai selesai & arsip.</p>
+                            <div class="alert alert-warning py-2 mb-3" style="font-size: 12px;">
+                                <i class="bi bi-building-exclamation me-1"></i> 
+                                Surat untuk <strong>Universitas</strong>. Mohon berikan disposisi ke Unit/Satker terkait.
                             </div>
 
-                            <input type="hidden" name="tujuan_satker_ids" value="">
+                            {{-- 1. KLASIFIKASI (MULTI SELECT) --}}
+                            <div class="mb-3">
+                                <label for="klasifikasi_id" class="form-label">Klasifikasi Arsip:</label>
+                                {{-- 
+                                    PENTING: 
+                                    1. class="select2" -> Agar tampilan tetap dropdown cantik.
+                                    2. multiple="multiple" -> Agar bisa pilih banyak.
+                                    3. name="klasifikasi_ids[]" -> Agar tersimpan sebagai array.
+                                --}}
+                                <select class="form-select select2" id="klasifikasi_id" name="klasifikasi_ids[]" multiple="multiple" required>
+                                    @foreach($daftarKlasifikasi as $klasifikasi)
+                                        <option value="{{ $klasifikasi->id }}">
+                                            {{ $klasifikasi->nama_klasifikasi }}
+                                        </option>
+                                    @endforeach
+                                </select>
+                            </div>
+
+                            {{-- 2. TUJUAN (MULTI SELECT) --}}
+                            <div class="mb-3" id="wrapper_satker">
+                                <label for="tujuan_satker_ids" class="form-label">Diteruskan Kepada:</label>
+                                <select class="form-select select2" id="tujuan_satker_ids" name="tujuan_satker_ids[]" multiple="multiple" required>
+                                    @foreach($daftarSatker as $satker)
+                                        <option value="{{ $satker->id }}">{{ $satker->nama_satker }}</option>
+                                    @endforeach
+                                    <option value="lainnya">Lainnya (Ormawa / Pihak Luar)</option>
+                                </select>
+                                <div class="form-text text-muted">Bisa pilih lebih dari satu Satker.</div>
+                            </div>
+
+                            {{-- 3. INPUT LAINNYA (Dinamis) --}}
+                            <div class="mb-3" id="wrapper_tujuan_lain" style="display: none;">
+                                <label for="disposisi_lain" class="form-label fw-bold text-primary">Tuliskan Tujuan Lainnya:</label>
+                                {{-- NAME DIGANTI JADI 'disposisi_lain' AGAR SESUAI CONTROLLER --}}
+                                <input type="text" class="form-control" id="disposisi_lain" name="disposisi_lain" placeholder="Contoh: BEM Universitas, UKM Musik">
+                            </div>
+
+                            {{-- 4. CATATAN REKTOR (Muncul jika ada satker terpilih ATAU Lainnya) --}}
+                            <div class="mb-3" id="wrapper_catatan" style="display: none;">
+                                <label for="catatan_rektor" class="form-label">Catatan / Arahan Rektor:</label>
+                                <textarea class="form-control" id="catatan_rektor" name="catatan_rektor" rows="4" placeholder="Contoh: 'Tolong pelajari dan tindak lanjuti sesuai aturan.'"></textarea>
+                            </div>
+
+                            <hr>
 
                             <div class="d-grid">
-                                <button type="submit" class="btn btn-success btn-lg disposisi-rektor-btn py-3">
-                                    <i class="bi bi-check-circle-fill me-2 disposisi-rektor-icon"></i> Selesai & Arsipkan
+                                <button type="submit" class="btn btn-primary btn-lg disposisi-rektor-btn" style="font-size:14px;">
+                                    <i class="bi bi-send-check-fill me-2 disposisi-rektor-icon"></i> Simpan
                                 </button>
                             </div>
 
@@ -219,7 +263,7 @@
 
                             <div class="d-grid">
                                 <button type="submit" class="btn btn-primary btn-lg disposisi-rektor-btn" style="font-size:14px;">
-                                    <i class="bi bi-send-check-fill me-2 disposisi-rektor-icon"></i> Simpan & Teruskan ke BAU
+                                    <i class="bi bi-send-check-fill me-2 disposisi-rektor-icon"></i> Simpan 
                                 </button>
                             </div>
                         @endif

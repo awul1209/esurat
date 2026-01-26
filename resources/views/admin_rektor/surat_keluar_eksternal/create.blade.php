@@ -69,22 +69,17 @@
                         {{-- BARIS 1: Nomor Surat & Tanggal Surat --}}
                         <div class="row g-4 mb-4">
                             {{-- Input 1: Nomor Surat --}}
-                            <div class="col-md-6">
-                                <label class="form-label">Nomor Surat <span class="text-danger">*</span></label>
-                                <div class="input-group">
-                                    <span class="input-group-text"><i class="bi bi-hash"></i></span>
-                                    <input type="text" name="nomor_surat" 
-                                           class="form-control @error('nomor_surat') is-invalid @enderror" 
-                                           value="{{ old('nomor_surat') }}" 
-                                           placeholder="Contoh: 001/EKSTERNAL/2025" required>
-                                    
-                                    @error('nomor_surat') 
-                                        <div class="invalid-feedback">
-                                            <strong>{{ $message }}</strong> (Nomor surat ini sudah terdaftar).
-                                        </div> 
-                                    @enderror
-                                </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Nomor Surat <span class="text-danger">*</span></label>
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="bi bi-hash"></i></span>
+                                <input type="text" name="nomor_surat" 
+                                    class="form-control @error('nomor_surat') is-invalid @enderror" 
+                                    value="{{ old('nomor_surat') }}" 
+                                    placeholder="Contoh: 001/REK/EKST/2026" required>
                             </div>
+                            <small class="text-muted">Nomor surat ini akan divalidasi oleh BAU sebelum diteruskan.</small>
+                        </div>
 
                             {{-- Input 2: Tanggal Surat --}}
                             <div class="col-md-6">
@@ -129,7 +124,7 @@
 
                         {{-- BARIS 3: File Upload --}}
                         <div class="row">
-                            <div class="col-12">
+                             <div class="col-6">
                                 <div class="p-3 bg-light rounded border">
                                     <label class="form-label mb-2"><i class="bi bi-paperclip me-1"></i> Upload File Surat <span class="text-danger">*</span></label>
                                     
@@ -150,6 +145,23 @@
                                     </div>
                                 </div>
                             </div>
+                        {{-- Tambahan di create.blade.php Rektor --}}
+                       <div class="col-md-6">
+                            <label class="form-label">Dikirim Via <span class="text-danger">*</span></label>
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="bi bi-truck"></i></span>
+                                <select name="via" class="form-select @error('via') is-invalid @enderror" required>
+                                    <option value="" selected disabled>-- Pilih Jalur Pengiriman --</option>
+                                    <option value="Email" {{ old('via') == 'Email' ? 'selected' : '' }}>Email Official</option>
+                                    <option value="Pos/Kurir" {{ old('via') == 'Pos/Kurir' ? 'selected' : '' }}>Pos Indonesia / Kurir</option>
+                                    <option value="Diambil" {{ old('via') == 'Diambil' ? 'selected' : '' }}>Diambil Langsung</option>
+                                    <option value="Lainnya" {{ old('via') == 'Lainnya' ? 'selected' : '' }}>Lainnya</option>
+                                </select>
+                            </div>
+                            @error('via') <div class="text-danger small mt-1">{{ $message }}</div> @enderror
+                        </div>
+
+                           
                         </div>
 
                         {{-- TOMBOL AKSI --}}

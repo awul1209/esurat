@@ -256,7 +256,7 @@
     </div>
 </div>
 
-{{-- MODAL 2: Riwayat --}}
+{{-- MODAL 2: Riwayat LOG --}}
 <div class="modal fade" id="riwayatModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
@@ -317,44 +317,62 @@
             detailSuratModal.querySelector('#modal-file-preview-wrapper').innerHTML = html;
         });
 
-        // Riwayat Modal
-        var riwayatModal = document.getElementById('riwayatModal');
-        riwayatModal.addEventListener('show.bs.modal', function (event) {
-            var button = event.relatedTarget;
-            var dataUrl = button.getAttribute('data-url');
-            var modalBody = riwayatModal.querySelector('#riwayatModalBody');
-            var modalLabel = riwayatModal.querySelector('#riwayatModalLabel');
+      // Riwayat Modal
+var riwayatModal = document.getElementById('riwayatModal');
+riwayatModal.addEventListener('show.bs.modal', function (event) {
+    var button = event.relatedTarget;
+    var dataUrl = button.getAttribute('data-url');
+    var modalBody = riwayatModal.querySelector('#riwayatModalBody');
+    var modalLabel = riwayatModal.querySelector('#riwayatModalLabel');
 
-            modalBody.innerHTML = '<div class="text-center p-4"><div class="spinner-border text-primary"></div><p class="mt-2">Memuat...</p></div>';
+    modalBody.innerHTML = '<div class="text-center p-4"><div class="spinner-border text-primary"></div><p class="mt-2">Memuat...</p></div>';
+    
+    fetch(dataUrl)
+        .then(response => response.json())
+        .then(surat => {
+            modalLabel.textContent = 'Riwayat Surat: ' + surat.perihal;
+            var html = '<ul class="timeline">';
             
-            fetch(dataUrl)
-                .then(response => response.json())
-                .then(surat => {
-                    modalLabel.textContent = 'Riwayat Surat: ' + surat.perihal;
-                    var html = '<ul class="timeline">';
-                    surat.riwayats.forEach((item) => {
-                        var badge = 'primary'; var icon = 'bi-check';
-                        if (item.status_aksi.includes('Selesai')) badge = 'success';
-                        else if (item.status_aksi.includes('Diteruskan')) badge = 'warning';
-                        
-                        if (item.status_aksi.includes('Input')) icon = 'bi-pencil-fill';
-                        else if (item.status_aksi.includes('Rektor')) icon = 'bi-person-workspace';
+            // Tambahkan filter .filter() sebelum .forEach() sebagai pengaman tambahan
+            surat.riwayats.filter(item => {
+                const aksi = item.status_aksi.toLowerCase();
+                // HANYA tampilkan jika BUKAN informasi umum atau delegasi pegawai
+        return !aksi.includes('informasi umum') && !aksi.includes('delegasi') && !aksi.includes('diarsipkan/selesai di satker');
+            }).forEach((item) => {
+                var badge = 'primary'; var icon = 'bi-check';
+                
+                if (item.status_aksi.includes('Selesai')) badge = 'success';
+                else if (item.status_aksi.includes('Diteruskan')) badge = 'warning';
+                
+                if (item.status_aksi.includes('Input')) icon = 'bi-pencil-fill';
+                else if (item.status_aksi.includes('Rektor')) icon = 'bi-person-workspace';
+                else if (item.status_aksi.includes('Dikirim ke Satker')) icon = 'bi-send-check-fill'; // Ikon tambahan untuk estetika
 
-                        html += `<li>
-                                    <div class="timeline-badge ${badge}"><i class="bi ${icon}"></i></div>
-                                    <div class="timeline-panel">
-                                        <div class="timeline-heading">
-                                            <h6 class="timeline-title">${item.status_aksi}</h6>
-                                            <p><small class="text-muted"><i class="bi bi-clock-fill"></i> ${formatTanggal(item.created_at)}<br>${item.user.name}</small></p>
-                                        </div>
-                                        <div class="timeline-body"><p>${item.catatan}</p></div>
-                                    </div>
-                                </li>`;
-                    });
-                    html += '</ul>';
-                    modalBody.innerHTML = html;
-                });
+                html += `<li>
+                    <div class="timeline-badge ${badge}"><i class="bi ${icon}"></i></div>
+                    <div class="timeline-panel">
+                        <div class="timeline-heading">
+                            <h6 class="timeline-title">${item.status_aksi}</h6>
+                            <p class="mb-0">
+                                <small class="text-muted">
+                                    <i class="bi bi-clock-fill"></i> 
+                                    ${item.tanggal_f ? item.tanggal_f : item.created_at}
+                                    <br>
+                                    <i class="bi bi-person-fill"></i> ${item.user ? item.user.name : 'Sistem'}
+                                </small>
+                            </p>
+                        </div>
+                        <div class="timeline-body mt-2">
+                            <p class="mb-0 text-dark">${item.catatan ?? '-'}</p>
+                        </div>
+                    </div>
+                </li>`;
+            });
+            
+            html += '</ul>';
+            modalBody.innerHTML = html;
         });
+});
     });
 </script>
 @endpush

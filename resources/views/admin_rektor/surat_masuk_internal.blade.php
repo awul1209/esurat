@@ -40,46 +40,51 @@
                             <th class="text-center" width="15%">Aksi</th>
                         </tr>
                     </thead>
-                    <tbody>
-                        @foreach ($suratInternal as $surat)
-                        <tr>
-                            <td class="text-center">{{ $loop->iteration }}</td>
-                            <td>
-                                <span class="fw-bold text-dark">{{ $surat->surat_dari }}</span>
-                                <br>
-                                <small class="text-muted">No: {{ $surat->nomor_surat }}</small>
-                            </td>
-                            <td>{{ $surat->perihal }}</td>
-                            <td>
-                                {{ $surat->diterima_tanggal->isoFormat('D MMMM YYYY') }}
-                                <br>
-                                <span class="badge bg-warning text-dark" style="font-size: 0.7rem;">Menunggu Disposisi</span>
-                            </td>
-                            <td class="text-center">
-                                <div class="d-flex justify-content-center gap-1">
-                                    {{-- Tombol Lihat Detail --}}
-                                    <button type="button" class="btn btn-sm btn-info text-white btn-icon" 
-                                        title="Lihat Detail"
-                                        data-bs-toggle="modal" 
-                                        data-bs-target="#detailInternalModal"
-                                        data-no-agenda="{{ $surat->no_agenda }}"
-                                        data-perihal="{{ $surat->perihal }}"
-                                        data-asal-surat="{{ $surat->surat_dari }}"
-                                        data-tanggal-surat="{{ $surat->tanggal_surat->isoFormat('D MMMM YYYY') }}"
-                                        data-tanggal-diterima="{{ $surat->diterima_tanggal->isoFormat('D MMMM YYYY') }}"
-                                        data-file-url="{{ Storage::url($surat->file_surat) }}">
-                                        <i class="bi bi-eye-fill"></i>
-                                    </button>
+                   <tbody>
+    {{-- 1. Inisialisasi Nomor Manual --}}
+    @php $nomor = 1; @endphp
 
-                                    {{-- Tombol Tindak Lanjuti (Disposisi) --}}
-                                    <a href="{{ route('adminrektor.disposisi.show', $surat->id) }}" class="btn btn-primary btn-sm btn-icon" title="Proses Disposisi">
-                                        <i class="bi bi-pencil-square"></i> Proses
-                                    </a>
-                                </div>
-                            </td>
-                        </tr>
-                        @endforeach
-                    </tbody>
+    @foreach ($suratInternal as $surat)
+    <tr>
+        {{-- 2. Gunakan variabel nomor manual lalu tambah 1 ($nomor++) --}}
+        <td class="text-center">{{ $nomor++ }}</td>
+        
+        <td>
+            <span class="fw-bold text-dark">{{ $surat->surat_dari }}</span>
+            <br>
+            <small class="text-muted">No: {{ $surat->nomor_surat }}</small>
+        </td>
+        <td>{{ $surat->perihal }}</td>
+        <td>
+            {{ $surat->diterima_tanggal->isoFormat('D MMMM YYYY') }}
+            <br>
+            <span class="badge bg-warning text-dark" style="font-size: 0.7rem;">Menunggu Disposisi</span>
+        </td>
+        <td class="text-center">
+            <div class="d-flex justify-content-center gap-1">
+                {{-- Tombol Lihat Detail --}}
+                <button type="button" class="btn btn-sm btn-info text-white btn-icon" 
+                    title="Lihat Detail"
+                    data-bs-toggle="modal" 
+                    data-bs-target="#detailInternalModal"
+                    data-no-agenda="{{ $surat->no_agenda }}"
+                    data-perihal="{{ $surat->perihal }}"
+                    data-asal-surat="{{ $surat->surat_dari }}"
+                    data-tanggal-surat="{{ $surat->tanggal_surat->isoFormat('D MMMM YYYY') }}"
+                    data-tanggal-diterima="{{ $surat->diterima_tanggal->isoFormat('D MMMM YYYY') }}"
+                    data-file-url="{{ Storage::url($surat->file_surat) }}">
+                    <i class="bi bi-eye-fill"></i>
+                </button>
+
+                {{-- Tombol Tindak Lanjuti (Disposisi) --}}
+                <a href="{{ route('adminrektor.disposisi.show', $surat->id) }}" class="btn btn-primary btn-sm btn-icon" title="Proses Disposisi">
+                    <i class="bi bi-pencil-square"></i> Proses
+                </a>
+            </div>
+        </td>
+    </tr>
+    @endforeach
+</tbody>
                 </table>
             </div>
         </div>
@@ -132,28 +137,53 @@
 <script src="https://cdn.datatables.net/v/bs5/dt-2.1.0/datatables.min.js"></script>
 <script>
     $(document).ready(function() {
-        // Init DataTable dengan Bahasa Indonesia (Hardcoded Object)
-        $('#tabelSuratInternal').DataTable({
-            // HAPUS bagian 'url' dan ganti dengan object di bawah ini
-            language: {
-                "emptyTable": "Tidak ada data yang tersedia pada tabel ini",
-                "info": "Menampilkan _START_ sampai _END_ dari _TOTAL_ entri",
-                "infoEmpty": "Menampilkan 0 sampai 0 dari 0 entri",
-                "infoFiltered": "(disaring dari _MAX_ total entri)",
-                "lengthMenu": "Tampilkan _MENU_ entri",
-                "loadingRecords": "Sedang memuat...",
-                "processing": "Sedang memproses...",
-                "search": "Cari:",
-                "zeroRecords": "Tidak ditemukan data yang sesuai",
-                "paginate": {
-                    "first": "Pertama",
-                    "last": "Terakhir",
-                    "next": "Selanjutnya",
-                    "previous": "Sebelumnya"
-                }
+      // 1. Simpan DataTable ke variabel 't' agar bisa dimanipulasi
+    var t = $('#tabelSuratInternal').DataTable({
+        // Konfigurasi Kolom
+        columnDefs: [
+            {
+                searchable: false,
+                orderable: false,
+                targets: 0 // Kolom "No" (index 0) JANGAN disortir user
             },
-            order: [[ 3, 'desc' ]] // Urut tanggal diterima terbaru
+            {
+                orderable: false,
+                targets: -1 // Kolom "Aksi" (index terakhir) JANGAN disortir user
+            }
+        ],
+        
+        // Urutan Default: Tetap gunakan preferensi Anda (Kolom ke-3 desc)
+        order: [], 
+
+        // Bahasa Indonesia (Sesuai kode Anda)
+        language: {
+            "emptyTable": "Tidak ada data yang tersedia pada tabel ini",
+            "info": "Menampilkan _START_ sampai _END_ dari _TOTAL_ entri",
+            "infoEmpty": "Menampilkan 0 sampai 0 dari 0 entri",
+            "infoFiltered": "(disaring dari _MAX_ total entri)",
+            "lengthMenu": "Tampilkan _MENU_ entri",
+            "loadingRecords": "Sedang memuat...",
+            "processing": "Sedang memproses...",
+            "search": "Cari:",
+            "zeroRecords": "Tidak ditemukan data yang sesuai",
+            "paginate": {
+                "first": "Pertama",
+                "last": "Terakhir",
+                "next": "Selanjutnya",
+                "previous": "Sebelumnya"
+            }
+        }
+    });
+
+    // 2. LOGIKA AUTO NOMOR (INI SOLUSINYA)
+    // Script ini akan berjalan setiap kali tabel di-sort atau di-search.
+    // Dia akan menimpa kolom pertama (No) dengan angka 1, 2, 3... berurutan.
+    t.on('order.dt search.dt', function () {
+        let i = 1;
+        t.column(0, {search: 'applied', order: 'applied'}).nodes().each(function (cell, k) {
+            cell.innerHTML = i++;
         });
+    }).draw();
 
         // Init Modal Detail
         var detailModal = document.getElementById('detailInternalModal');

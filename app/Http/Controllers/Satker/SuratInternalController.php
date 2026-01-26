@@ -30,162 +30,301 @@ use App\Models\User;
 
 
 // Import Service WA & Carbon (PENTING)
+use App\Helpers\EmailHelper;
 use App\Services\WaService;
 use Carbon\Carbon; // <--- INI YANG MENYEBABKAN ERROR SEBELUMNYA
 
 class SuratInternalController extends Controller
 {
-// 1. UPDATE METHOD INDEX (Agar Filter Berjalan)
+// 1. UPDATE METHOD INDEX (Agar Filter Berjalan & Mendukung Delegasi)
 public function indexMasuk(Request $request)
-    {
-        $mySatkerId = Auth::user()->satker_id;
+{
+    $mySatkerId = Auth::user()->satker_id;
 
-        // 1. SUMBER A: Surat dari Satker Lain (Tabel SuratKeluar)
-        $queryReal = \App\Models\SuratKeluar::with(['user.satker']) 
-            ->where('tipe_kirim', 'internal')
-            ->whereHas('penerimaInternal', function($q) use ($mySatkerId) {
-                $q->where('satkers.id', $mySatkerId);
+    // 1. SUMBER A: Surat dari Satker Lain atau REKTOR
+    $queryReal = \App\Models\SuratKeluar::with(['user.satker', 'penerimaInternal', 'riwayats.penerima']) 
+        ->where('tipe_kirim', 'internal')
+        ->whereHas('penerimaInternal', function($q) use ($mySatkerId) {
+            $q->where('satker_id', $mySatkerId);
+        })
+        ->where(function($q) {
+            $q->whereHas('user', function($u) {
+                $u->where('role', 'admin_rektor');
+            })->where('status', 'selesai')->whereNotNull('tanggal_terusan');
+            
+            $q->orWhereHas('user', function($u) {
+                $u->where('role', '!=', 'admin_rektor');
             });
-
-        // 2. SUMBER B: Surat Inputan Manual (Tabel Surat)
-        $queryManual = \App\Models\Surat::with(['user.satker'])
-            ->where('tipe_surat', 'internal')
-            ->where('tujuan_satker_id', $mySatkerId);
-
-        // Logika Filter Tanggal
-        if ($request->filled('start_date') && $request->filled('end_date')) {
-            $queryReal->whereBetween('tanggal_surat', [$request->start_date, $request->end_date]);
-            $queryManual->whereBetween('tanggal_surat', [$request->start_date, $request->end_date]);
-        }
-        
-        // --- EKSEKUSI QUERY ---
-        $dataReal = $queryReal->get();
-        $dataManual = $queryManual->get();
-
-        // --- [BAGIAN PENTING] MANIPULASI DATA SURAT KELUAR ---
-        // Kita loop data dari SuratKeluar, lalu kita isi 'diterima_tanggal' pakai 'created_at'
-        $dataReal->transform(function ($item) {
-            // Mapping: diterima_tanggal <-- created_at
-            $item->diterima_tanggal = $item->created_at;
-            return $item;
         });
-        // -----------------------------------------------------
 
-        // 3. GABUNGKAN DATA (Merge) & Sortir
-        // Sekarang kedua sumber data sudah punya 'diterima_tanggal' yang valid
-        $suratMasuk = $dataReal->merge($dataManual)->sortByDesc('tanggal_surat');
+    // 2. SUMBER B: Surat Inputan Manual
+    $queryManual = \App\Models\Surat::with(['user.satker', 'riwayats.penerima'])
+        ->where('tipe_surat', 'internal')
+        ->where('tujuan_satker_id', $mySatkerId);
 
-        // Data Pendukung Modal
-        $daftarSatker = \App\Models\Satker::where('id', '!=', $mySatkerId)->get();
-        $daftarPegawai = \App\Models\User::where('satker_id', $mySatkerId)->where('id', '!=', Auth::id())->get();
-
-        return view('satker.internal.surat_masuk_index', compact('suratMasuk', 'daftarSatker', 'daftarPegawai'));
+    // Filter Tanggal
+    if ($request->filled('start_date') && $request->filled('end_date')) {
+        $queryReal->whereBetween('tanggal_surat', [$request->start_date, $request->end_date]);
+        $queryManual->whereBetween('tanggal_surat', [$request->start_date, $request->end_date]);
     }
+    
+    $dataReal = $queryReal->get();
+    $dataManual = $queryManual->get();
+
+    // Transform Sumber A (Sistem)
+    $dataReal->transform(function ($item) use ($mySatkerId) {
+        $myPivot = $item->penerimaInternal->where('id', $mySatkerId)->first();
+        $item->is_read_internal = $myPivot ? $myPivot->pivot->is_read : 0;
+        $item->diterima_tanggal = $item->tanggal_terusan ?? $item->created_at;
+        $item->is_manual = false; // Penanda bukan manual
+        return $item;
+    });
+
+    // Transform Sumber B (Manual) - PENYESUAIAN DISINI
+    $dataManual->transform(function ($item) {
+        $item->is_manual = true; // Penanda manual agar tombol muncul
+        $item->diterima_tanggal = $item->diterima_tanggal ?? $item->created_at;
+        return $item;
+    });
+
+    $suratMasuk = $dataReal->merge($dataManual)->sortByDesc('diterima_tanggal');
+    $daftarSatker = \App\Models\Satker::where('id', '!=', $mySatkerId)->get();
+
+    $pegawaiList = \App\Models\User::where('satker_id', $mySatkerId)
+        ->where('id', '!=', Auth::id())
+        ->whereIn('role', ['pegawai', 'dosen'])
+        ->orderBy('name', 'asc')
+        ->get();
+
+    return view('satker.internal.surat_masuk_index', compact(
+        'suratMasuk', 
+        'daftarSatker', 
+        'pegawaiList',
+    ));
+}
 
 
    // 2. PERBAIKAN METHOD EXPORT (FINAL & RAPI)
-    public function exportMasuk(Request $request)
-    {
-        $mySatkerId = Auth::user()->satker_id;
-        $fileName = 'Surat_Masuk_Internal_' . date('Y-m-d_H-i') . '.csv';
+   public function exportMasuk(Request $request)
+{
+    $mySatkerId = Auth::user()->satker_id;
+    $fileName = 'Surat_Masuk_Internal_' . date('Y-m-d_H-i') . '.csv';
 
-        // --- 1. SUMBER A: Surat dari Satker Lain (Tabel SuratKeluar) ---
-        $queryReal = \App\Models\SuratKeluar::with(['user.satker'])
-            ->where('tipe_kirim', 'internal')
-            ->whereHas('penerimaInternal', function($q) use ($mySatkerId) {
-                $q->where('satkers.id', $mySatkerId);
-            });
+    // --- 1. SUMBER A: Surat dari Satker Lain (Tabel SuratKeluar) ---
+    $queryReal = \App\Models\SuratKeluar::with(['user.satker'])
+        ->where('tipe_kirim', 'internal')
+        ->whereHas('penerimaInternal', function($q) use ($mySatkerId) {
+            $q->where('satkers.id', $mySatkerId);
+        });
 
-        // --- 2. SUMBER B: Surat Inputan Manual (Tabel Surat) ---
-        $queryManual = \App\Models\Surat::where('tipe_surat', 'internal')
-            ->where('tujuan_satker_id', $mySatkerId);
+    // --- 2. SUMBER B: Surat Inputan Manual (Tabel Surat) ---
+    $queryManual = \App\Models\Surat::where('tipe_surat', 'internal')
+        ->where('tujuan_satker_id', $mySatkerId);
 
-        // --- 3. FILTER TANGGAL (Terapkan ke kedua query) ---
-        if ($request->filled('start_date') && $request->filled('end_date')) {
-            $queryReal->whereBetween('tanggal_surat', [$request->start_date, $request->end_date]);
-            $queryManual->whereBetween('tanggal_surat', [$request->start_date, $request->end_date]);
-        }
-
-        // Ambil Data & Gabungkan
-        $dataReal = $queryReal->get();
-        $dataManual = $queryManual->get();
-        
-        // Gabungkan dan Urutkan berdasarkan tanggal terbaru (SAMA DENGAN INDEX)
-        $data = $dataReal->merge($dataManual)->sortByDesc('tanggal_surat');
-
-        // --- 4. STREAM CSV ---
-        $headers = [
-            "Content-type"        => "text/csv; charset=UTF-8", // Tambahkan charset
-            "Content-Disposition" => "attachment; filename=$fileName",
-            "Pragma"              => "no-cache",
-            "Cache-Control"       => "must-revalidate, post-check=0, pre-check=0",
-            "Expires"             => "0"
-        ];
-
-        $callback = function() use ($data) {
-            $file = fopen('php://output', 'w');
-            
-            // Tambahkan BOM untuk UTF-8 agar Excel membacanya dengan benar
-            fprintf($file, chr(0xEF).chr(0xBB).chr(0xBF));
-
-            // Header Kolom Excel
-            fputcsv($file, ['No', 'No Surat', 'Tanggal Surat', 'Perihal', 'Pengirim', 'Tipe', 'Link Surat']);
-
-            // Isi Data
-            foreach ($data as $index => $row) {
-                // Logika Penentuan Pengirim
-                if ($row instanceof \App\Models\Surat) {
-                    // Manual
-                    $pengirim = $row->surat_dari; 
-                    $tipe     = "Input Manual";
-                } else {
-                    // Otomatis (SuratKeluar)
-                    $pengirim = $row->user && $row->user->satker ? $row->user->satker->nama_satker : 'Rektorat';
-                    $tipe     = "Kiriman Satker";
-                }
-
-                // Siapkan Link File (Gunakan url() agar link lengkap)
-                $linkFile = $row->file_surat ? url('storage/' . $row->file_surat) : 'Tidak ada file';
-
-                fputcsv($file, [
-                    $index + 1,
-                    $row->nomor_surat,
-                    $row->tanggal_surat->format('d-m-Y'),
-                    $row->perihal,
-                    $pengirim,
-                    $tipe,
-                    $linkFile
-                ]);
-            }
-            fclose($file);
-        };
-
-        return response()->stream($callback, 200, $headers);
+    // --- 3. FILTER TANGGAL ---
+    if ($request->filled('start_date') && $request->filled('end_date')) {
+        $queryReal->whereBetween('tanggal_surat', [$request->start_date, $request->end_date]);
+        $queryManual->whereBetween('tanggal_surat', [$request->start_date, $request->end_date]);
     }
 
+    // Ambil Data & Gabungkan
+    $dataReal = $queryReal->get();
+    $dataManual = $queryManual->get();
+    
+    // Gabungkan, Urutkan, dan gunakan values() untuk me-reset index array agar terurut dari 0
+    $data = $dataReal->merge($dataManual)->sortByDesc('tanggal_surat')->values();
 
-  public function indexKeluar(Request $request)
-    {
-        $userId = Auth::id();
+    // --- 4. STREAM CSV ---
+    $headers = [
+        "Content-type"        => "text/csv; charset=UTF-8",
+        "Content-Disposition" => "attachment; filename=$fileName",
+        "Pragma"              => "no-cache",
+        "Cache-Control"       => "must-revalidate, post-check=0, pre-check=0",
+        "Expires"             => "0"
+    ];
 
-        // 1. Mulai Query Builder
-        $query = SuratKeluar::with(['penerimaInternal']) 
-            ->where('tipe_kirim', 'internal')
-            ->where('user_id', $userId);
+    $callback = function() use ($data) {
+        $file = fopen('php://output', 'w');
+        
+        // Tambahkan BOM untuk UTF-8
+        fprintf($file, chr(0xEF).chr(0xBB).chr(0xBF));
 
-        // 2. Cek Filter Tanggal
-        if ($request->filled('start_date') && $request->filled('end_date')) {
-            $query->whereBetween('tanggal_surat', [
-                $request->start_date, 
-                $request->end_date
+        // Header Kolom Excel
+        fputcsv($file, ['No', 'No Surat', 'Tanggal Surat', 'Perihal', 'Pengirim', 'Tipe', 'Link Surat']);
+
+        // Variabel counter nomor urut
+        $no = 1;
+
+        // Isi Data
+        foreach ($data as $row) {
+            // Logika Penentuan Pengirim
+            if ($row instanceof \App\Models\Surat) {
+                $pengirim = $row->surat_dari; 
+                $tipe     = "Input Manual";
+            } else {
+                $pengirim = $row->user && $row->user->satker ? $row->user->satker->nama_satker : 'Rektorat';
+                $tipe     = "Kiriman Satker";
+            }
+
+            // Format Tanggal (Cek apakah instance Carbon, jika tidak parse manual)
+            $tglSurat = ($row->tanggal_surat instanceof \Carbon\Carbon) 
+                        ? $row->tanggal_surat->format('d-m-Y') 
+                        : date('d-m-Y', strtotime($row->tanggal_surat));
+
+            // Siapkan Link File
+            $linkFile = $row->file_surat ? url('storage/' . $row->file_surat) : 'Tidak ada file';
+
+            fputcsv($file, [
+                $no++, // Gunakan increment agar pasti urut 1, 2, 3...
+                $row->nomor_surat,
+                $tglSurat,
+                $row->perihal,
+                $pengirim,
+                $tipe,
+                $linkFile
             ]);
         }
+        fclose($file);
+    };
 
-        // 3. Ambil Data
-        $suratKeluar = $query->latest('tanggal_surat')->get();
+    return response()->stream($callback, 200, $headers);
+}
 
-        return view('satker.internal.surat_keluar_index', compact('suratKeluar'));
+    // delegasi surat masuk internal
+public function delegate(Request $request)
+{
+    $request->validate([
+        'id'          => 'required',
+        'target_tipe' => 'required|in:pribadi,semua',
+        // Klasifikasi hanya wajib jika target_tipe adalah pribadi
+        'klasifikasi' => 'required_if:target_tipe,pribadi',
+        'asal_tabel'  => 'required|in:surat,surat_keluar',
+        'user_id'     => 'required_if:target_tipe,pribadi|array'
+    ]);
+
+    try {
+        \DB::beginTransaction();
+
+        $admin = Auth::user();
+        $idSurat = $request->id;
+        
+        // Identifikasi Model
+        $surat = ($request->asal_tabel == 'surat_keluar') 
+            ? \App\Models\SuratKeluar::findOrFail($idSurat) 
+            : \App\Models\Surat::findOrFail($idSurat);
+
+        $penerimaNotifIds = [];
+
+        // Tentukan nilai default jika menyebar ke semua pegawai
+        $klasifikasi = ($request->target_tipe == 'semua') 
+            ? 'Informasi Umum' 
+            : $request->klasifikasi;
+            
+        $catatan = ($request->target_tipe == 'semua') 
+            ? 'Surat ini disebarluaskan kepada seluruh pegawai untuk diketahui.' 
+            : $request->catatan;
+
+        if ($request->target_tipe == 'pribadi') {
+            // LOGIKA PRIBADI (Disposisi Spesifik)
+            $userIds = $request->input('user_id', []);
+            foreach ($userIds as $userId) {
+                \App\Models\RiwayatSurat::create([
+                    'surat_id'        => $request->asal_tabel == 'surat' ? $surat->id : null,
+                    'surat_keluar_id' => $request->asal_tabel == 'surat_keluar' ? $surat->id : null,
+                    'user_id'         => $admin->id,
+                    'penerima_id'     => $userId,
+                    'status_aksi'     => 'Disposisi: ' . $klasifikasi, 
+                    'catatan'         => $catatan,
+                ]);
+                $penerimaNotifIds[] = $userId;
+            }
+        } else {
+            // LOGIKA SEBAR SEMUA (Bukan Disposisi, tapi Penyebaran Informasi)
+            $semuaPegawai = \App\Models\User::where('satker_id', $admin->satker_id)
+                                ->where('role', 'pegawai')
+                                ->get();
+
+            foreach ($semuaPegawai as $pegawai) {
+                \App\Models\RiwayatSurat::create([
+                    'surat_id'        => $request->asal_tabel == 'surat' ? $surat->id : null,
+                    'surat_keluar_id' => $request->asal_tabel == 'surat_keluar' ? $surat->id : null,
+                    'user_id'         => $admin->id,
+                    'penerima_id'     => $pegawai->id,
+                    'status_aksi'     => 'Informasi: ' . $klasifikasi,
+                    'catatan'         => $catatan,
+                ]);
+                $penerimaNotifIds[] = $pegawai->id;
+            }
+        }
+
+        // --- UPDATE STATUS DI SATKER ---
+// --- UPDATE STATUS DI SATKER ---
+if ($request->asal_tabel == 'surat_keluar') {
+    /**
+     * Sesuai instruksi: 
+     * Saat didelegasikan/disebarkan, Admin Satker dianggap sudah memproses.
+     * Maka is_read di tabel pivot surat_keluar_internal_penerima menjadi 2 (Selesai).
+     */
+    $surat->penerimaInternal()->updateExistingPivot($admin->satker_id, [
+        'is_read' => 2 
+    ]);
+    
+    // Opsional: Jika Anda ingin status global surat_keluars juga berubah 
+    // hanya jika surat ini ditujukan khusus untuk satker tersebut (bukan univ).
+    $surat->update(['status' => 'selesai']);
+
+} else {
+    // Untuk Surat dari Univ/Eksternal (tabel surats)
+    $surat->update(['status' => 'selesai']);
+}
+
+        \DB::commit();
+
+        // --- KIRIM EMAIL ---
+        if (!empty($penerimaNotifIds)) {
+            $details = [
+                'subject'    => '['.strtoupper($request->target_tipe).']: ' . $surat->perihal,
+                'greeting'   => 'Halo,',
+                'body'       => "Anda menerima " . ($request->target_tipe == 'semua' ? "informasi" : "disposisi") . " surat baru dari {$admin->name}. \n\n" .
+                                "No. Surat: {$surat->nomor_surat}\n" .
+                                "Perihal: {$surat->perihal}\n" .
+                                "Instruksi: " . $klasifikasi,
+                'actiontext' => 'Lihat Surat',
+                'actionurl'  => route('login'),
+                'file_url'   => $surat->file_surat ? asset('storage/' . $surat->file_surat) : null
+            ];
+            \App\Helpers\EmailHelper::kirimNotif($penerimaNotifIds, $details);
+        }
+
+        return redirect()->back()->with('success', 'Surat berhasil ' . ($request->target_tipe == 'semua' ? 'disebarkan ke semua pegawai.' : 'didisposisikan.'));
+
+    } catch (\Exception $e) {
+        \DB::rollBack();
+        return redirect()->back()->with('error', 'Gagal: ' . $e->getMessage());
     }
+}
+
+ public function indexKeluar(Request $request)
+{
+    $userId = Auth::id();
+
+    // Pastikan relasi penerimaInternal (Satker) dan riwayats tetap dimuat
+    $query = SuratKeluar::with(['penerimaInternal', 'riwayats.penerima.satker']) 
+        ->where('tipe_kirim', 'internal')
+        ->where('user_id', $userId);
+
+    // Filter Tanggal
+    if ($request->filled('start_date') && $request->filled('end_date')) {
+        $query->whereBetween('tanggal_surat', [
+            $request->start_date, 
+            $request->end_date
+        ]);
+    }
+
+    $suratKeluar = $query->latest('tanggal_surat')->get();
+
+    return view('satker.internal.surat_keluar_index', compact('suratKeluar'));
+}
 
   public function exportKeluar(Request $request)
     {
@@ -289,183 +428,200 @@ public function indexMasuk(Request $request)
     }
 
     /**
-     * SIMPAN SURAT (DENGAN NOTIFIKASI WA)
+     * SIMPAN SURAT (DENGAN NOTIFIKASI email)
      */
+
+    // SURAT KELUAR INTERNAL
  public function store(Request $request)
-    {
-        // 1. Validasi
-        $request->validate([
-            // Tambahkan 'unique:surat_keluars,nomor_surat'
-            'nomor_surat'       => 'required|string|max:255|unique:surat_keluars,nomor_surat',
-            'perihal'           => 'required|string|max:255',
-            'tujuan_satker_ids' => 'required|array|min:1', 
-            'tanggal_surat'     => 'required|date',
-            'file_surat'        => 'required|file|mimes:pdf,jpg,png|max:5120',
-        ], [
-            // Custom Error Message (Opsional, agar pesan lebih jelas)
-            'nomor_surat.unique' => 'Nomor surat ini sudah terdaftar. Harap gunakan nomor lain.',
-            'tujuan_satker_ids.required' => 'Pilih setidaknya satu tujuan surat.'
+{
+    // 1. Validasi
+    $request->validate([
+        'nomor_surat'       => 'required|string|max:255|unique:surat_keluars,nomor_surat',
+        'perihal'           => 'required|string|max:255',
+        'tujuan_satker_ids' => 'required|array|min:1', 
+        'tanggal_surat'     => 'required|date',
+        'file_surat'        => 'required|file|mimes:pdf,jpg,png|max:5120',
+        'tujuan_user_ids'   => 'nullable|array', // Tambahan validasi untuk ID pegawai
+    ], [
+        'nomor_surat.unique' => 'Nomor surat ini sudah terdaftar. Harap gunakan nomor lain.',
+        'tujuan_satker_ids.required' => 'Pilih setidaknya satu tujuan surat.'
+    ]);
+
+    $user = Auth::user();
+    $path = $request->file('file_surat')->store('surat_keluar_internal_satker', 'public');
+
+    DB::transaction(function() use ($request, $user, $path) {
+        
+        // A. PISAHKAN INPUT
+        $inputTujuan = $request->tujuan_satker_ids;
+        $satkerIds = [];
+        $targetPimpinan = []; 
+        $isPegawaiSpesifik = false;
+
+        foreach($inputTujuan as $val) {
+            if ($val == 'rektor' || $val == 'universitas') {
+                $targetPimpinan[] = $val;
+            } elseif ($val == 'pegawai_spesifik') {
+                $isPegawaiSpesifik = true;
+            } elseif (is_numeric($val)) {
+                $satkerIds[] = $val;
+            }
+        }
+
+        // B. PROSES 1: SURAT KELUAR (Arsip Satker Pengirim)
+        $displayTujuan = [];
+        if (!empty($targetPimpinan)) {
+            $displayTujuan[] = implode(' & ', array_map('ucfirst', $targetPimpinan)) . " (Via BAU)";
+        }
+        
+        // Tambahkan keterangan di arsip jika ada tujuan pegawai spesifik
+        if ($isPegawaiSpesifik && $request->has('tujuan_user_ids')) {
+            $countPegawai = count($request->tujuan_user_ids);
+            $displayTujuan[] = "{$countPegawai} Pegawai Spesifik";
+        }
+
+        $suratKeluar = SuratKeluar::create([
+            'user_id'          => $user->id,
+            'tipe_kirim'       => 'internal',
+            'nomor_surat'      => $request->nomor_surat,
+            'perihal'          => $request->perihal,
+            'tanggal_surat'    => $request->tanggal_surat,
+            'tujuan_satker_id' => null, 
+            'tujuan_surat'     => !empty($displayTujuan) ? implode(', ', $displayTujuan) : null, 
+            'file_surat'       => $path,
         ]);
 
-        $user = Auth::user();
-        $path = $request->file('file_surat')->store('surat-internal', 'public');
+        // Persiapan Data Notifikasi
+        $namaPengirim = $user->satker->nama_satker ?? $user->name;
+        $tglSurat = \Carbon\Carbon::parse($request->tanggal_surat)->format('d-m-Y');
+        $link = route('login'); 
 
-        DB::transaction(function() use ($request, $user, $path) {
-            
-            // A. PISAHKAN INPUT
-            $inputTujuan = $request->tujuan_satker_ids;
-            $satkerIds = [];
-            $targetPimpinan = []; 
+        // --- 1. JIKA KIRIM KE SATKER LAIN (NOTIFIKASI EMAIL) ---
+        if (!empty($satkerIds)) {
+            $suratKeluar->penerimaInternal()->attach($satkerIds);
 
-            foreach($inputTujuan as $val) {
-                if ($val == 'rektor' || $val == 'universitas') {
-                    $targetPimpinan[] = $val;
-                } elseif (is_numeric($val)) {
-                    $satkerIds[] = $val;
-                }
+            $rolePenerima = ['satker', 'bau', 'bapsi', 'admin'];
+            $penerimaNotifIds = \App\Models\User::whereIn('satker_id', $satkerIds)
+                                            ->whereIn('role', $rolePenerima)
+                                            ->pluck('id')
+                                            ->toArray();
+
+            if (!empty($penerimaNotifIds)) {
+                $details = [
+                    'subject'    => 'Surat Masuk Baru: ' . $request->perihal,
+                    'greeting'   => 'Halo Tim Satker,',
+                    'body'       => "Anda menerima surat masuk baru dari {$namaPengirim}. \n\n" .
+                                    "No. Surat: {$request->nomor_surat}\n" .
+                                    "Tanggal Surat: {$tglSurat}\n" .
+                                    "Perihal: {$request->perihal}",
+                    'actiontext' => 'Buka Inbox Surat Masuk',
+                    'actionurl'  => $link,
+                    'file_url'   => asset('storage/' . $path)
+                ];
+                \App\Helpers\EmailHelper::kirimNotif($penerimaNotifIds, $details);
             }
+        }
 
-            // B. PROSES 1: SURAT KELUAR (Arsip Satker Pengirim)
-            $displayTujuan = [];
-            if (!empty($targetPimpinan)) {
-                $displayTujuan[] = implode(' & ', array_map('ucfirst', $targetPimpinan)) . " (Via BAU)";
-            }
-            
-            $suratKeluar = SuratKeluar::create([
-                'user_id'          => $user->id,
-                'tipe_kirim'       => 'internal',
-                'nomor_surat'      => $request->nomor_surat,
-                'perihal'          => $request->perihal,
-                'tanggal_surat'    => $request->tanggal_surat,
-                'tujuan_satker_id' => null, 
-                'tujuan_surat'     => !empty($displayTujuan) ? implode(', ', $displayTujuan) : null, 
-                'file_surat'       => $path,
-            ]);
+        // --- 2. JIKA KIRIM KE PEGAWAI SPESIFIK (NOTIFIKASI EMAIL KE PEGAWAI) ---
+if ($isPegawaiSpesifik && !empty($request->tujuan_user_ids)) {
+    foreach ($request->tujuan_user_ids as $penerimaUserId) {
+        // A. Simpan ke tabel surat (sebagai Inbox Pegawai)
+        $suratMasukPegawai = Surat::create([
+            'surat_dari'       => $namaPengirim, 
+            'tipe_surat'       => 'internal', 
+            'nomor_surat'      => $request->nomor_surat,
+            'tanggal_surat'    => $request->tanggal_surat,
+            'perihal'          => $request->perihal,
+            'no_agenda'        => 'PEGAWAI-' . strtoupper(uniqid()), 
+            'diterima_tanggal' => now(),
+            'sifat'            => 'Asli',
+            'file_surat'       => $path,
+            'status'           => 'proses', 
+            'user_id'          => $user->id, 
+            'tujuan_tipe'      => 'pegawai',
+            'tujuan_satker_id' => null,
+            'tujuan_user_id'   => $penerimaUserId,
+        ]);
 
-            // Persiapan Data Notifikasi
-            $namaPengirim = $user->satker->nama_satker ?? $user->name;
-            $tglSurat = \Carbon\Carbon::parse($request->tanggal_surat)->format('d-m-Y');
-            $link = route('login'); 
-
-            // --- 1. JIKA KIRIM KE SATKER LAIN (TERMASUK BAU SEBAGAI SATKER) ---
-            if (!empty($satkerIds)) {
-                $suratKeluar->penerimaInternal()->attach($satkerIds);
-
-                // === NOTIFIKASI WA KE ADMIN SATKER PENERIMA ===
-                try {
-                    // Role yang boleh menerima notif
-                    $rolePenerima = ['satker', 'bau', 'bapsi', 'admin'];
-
-                    // Cari User berdasarkan ID Satker tujuannya
-                    $penerimaNotif = User::whereIn('satker_id', $satkerIds)
-                                         ->whereIn('role', $rolePenerima)
-                                         ->get();
-
-                    foreach ($penerimaNotif as $penerima) {
-                        if ($penerima->no_hp) {
-                            
-                            // --- LOGIKA BARU (FORMAT KOMA) ---
-                            // 1. Pecah string berdasarkan koma ","
-                            $daftarNomor = explode(',', $penerima->no_hp);
-
-                            $namaTujuan = $penerima->satker->nama_satker ?? 'Satker Tujuan';
-                            $pesan = 
-"📩 *Notifikasi Surat Masuk Baru*
-
-Satker Tujuan : {$namaTujuan}
-Tanggal Surat : {$tglSurat}
-No. Surat     : {$request->nomor_surat}
-Perihal       : {$request->perihal}
-Pengirim      : {$namaPengirim}
-
-Silakan cek sistem e-Surat: {$link}";
-
-                            // 2. Loop setiap nomor yang sudah dipecah
-                            foreach ($daftarNomor as $nomor) {
-                                // Bersihkan spasi (trim) agar " 08123" jadi "08123"
-                                $nomorBersih = trim($nomor);
-                                
-                                // Bersihkan karakter non-angka jika perlu
-                                $nomorBersih = preg_replace('/[^0-9]/', '', $nomorBersih);
-
-                                if(!empty($nomorBersih)) {
-                                    WaService::send($nomorBersih, $pesan);
-                                }
-                            }
-                        }
-                    }
-                } catch (\Exception $e) { /* Abaikan error WA */ }
-            }
-
-            // --- 2. JIKA KIRIM KE REKTOR (Via BAU) ---
-            if (!empty($targetPimpinan)) {
-                
-                foreach ($targetPimpinan as $target) {
-                    $tujuanTipe = ($target == 'universitas') ? 'universitas' : 'rektor';
-                    $noAgendaSementara = 'PENDING-' . uniqid(); 
-
-                    $suratMasuk = Surat::create([
-                        'surat_dari'       => $user->satker->nama_satker ?? $user->name, 
-                        'tipe_surat'       => 'internal', 
-                        'nomor_surat'      => $request->nomor_surat,
-                        'tanggal_surat'    => $request->tanggal_surat,
-                        'perihal'          => $request->perihal,
-                        'no_agenda'        => $noAgendaSementara, 
-                        'diterima_tanggal' => now(),
-                        'sifat'            => 'Biasa',
-                        'file_surat'       => $path,
-                        'status'           => 'baru_di_bau', 
-                        'user_id'          => $user->id, 
-                        'tujuan_tipe'      => $tujuanTipe,
-                        'tujuan_satker_id' => null,
-                        'tujuan_user_id'   => null,
-                    ]);
-
-                    RiwayatSurat::create([
-                        'surat_id'    => $suratMasuk->id,
-                        'user_id'     => $user->id,
-                        'status_aksi' => 'Surat Masuk Internal',
-                        'catatan'     => 'Surat dikirim ke BAU (No. Agenda belum diisi). Menunggu verifikasi BAU.'
-                    ]);
-                }
-
-                // === NOTIFIKASI WA KE ADMIN BAU (KHUSUS REKTOR) ===
-                try {
-                    $adminBAU = User::where('role', 'bau')->first();
-                    
-                    if ($adminBAU && $adminBAU->no_hp) {
-                        
-                        // --- LOGIKA BARU (FORMAT KOMA) UNTUK BAU ---
-                        $daftarNomorBAU = explode(',', $adminBAU->no_hp);
-
-                        $pesan = 
-"📩 *Notifikasi Surat Masuk Baru (Via BAU)*
-
-Satker Tujuan : Rektor / Universitas
-Tanggal Surat : {$tglSurat}
-No. Surat     : {$request->nomor_surat}
-Perihal       : {$request->perihal}
-Pengirim      : {$namaPengirim}
-
-Silakan cek sistem e-Surat: {$link}";
-                        
-                        foreach ($daftarNomorBAU as $nomor) {
-                            $nomorBersih = trim($nomor);
-                            $nomorBersih = preg_replace('/[^0-9]/', '', $nomorBersih);
-
-                            if(!empty($nomorBersih)) {
-                                WaService::send($nomorBersih, $pesan);
-                            }
-                        }
-                    }
-                } catch (\Exception $e) { /* Abaikan error WA */ }
-            }
-
-        }); 
-
-        return redirect()->route('satker.surat-keluar.internal')
-                         ->with('success', 'Surat berhasil dikirim.');
+        // B. Simpan ke Riwayat (PENTING: Isi surat_keluar_id dan penerima_id)
+        RiwayatSurat::create([
+            'surat_id'         => $suratMasukPegawai->id, // Untuk tracking di inbox pegawai
+            'surat_keluar_id'  => $suratKeluar->id,      // PENTING: Untuk tracking di arsip satker
+            'user_id'          => $user->id,             // Aktor (pengirim)
+            'penerima_id'      => $penerimaUserId,       // PENTING: Target pegawai
+            'status_aksi'      => 'Surat Masuk Internal (Personal)',
+            'catatan'          => 'Surat dikirim langsung ke Pegawai spesifik.',
+            'is_read'          => 0                      // Status awal: Terkirim (Belum diterima)
+        ]);
     }
+
+    // Notifikasi Email ke Pegawai
+    $detailsPegawai = [
+        'subject'    => 'Surat Masuk Pribadi Baru: ' . $request->perihal,
+        'greeting'   => 'Halo Bapak/Ibu,',
+        'body'       => "Anda menerima surat internal baru yang ditujukan langsung kepada Anda dari {$namaPengirim}.\n\n" .
+                        "No. Surat: {$request->nomor_surat}\n" .
+                        "Perihal: {$request->perihal}",
+        'actiontext' => 'Lihat Surat Saya',
+        'actionurl'  => $link,
+        'file_url'   => asset('storage/' . $path)
+    ];
+
+    \App\Helpers\EmailHelper::kirimNotif($request->tujuan_user_ids, $detailsPegawai);
+}
+
+        // --- 3. JIKA KIRIM KE REKTOR (Via BAU - NOTIFIKASI EMAIL KE BAU) ---
+        if (!empty($targetPimpinan)) {
+            foreach ($targetPimpinan as $target) {
+                $tujuanTipe = ($target == 'universitas') ? 'universitas' : 'rektor';
+                $noAgendaSementara = 'PENDING-' . uniqid(); 
+
+                $suratMasuk = Surat::create([
+                    'surat_dari'       => $namaPengirim, 
+                    'tipe_surat'       => 'internal', 
+                    'nomor_surat'      => $request->nomor_surat,
+                    'tanggal_surat'    => $request->tanggal_surat,
+                    'perihal'          => $request->perihal,
+                    'no_agenda'        => $noAgendaSementara, 
+                    'diterima_tanggal' => now(),
+                    'sifat'            => 'Biasa',
+                    'file_surat'       => $path,
+                    'status'           => 'baru_di_bau', 
+                    'user_id'          => $user->id, 
+                    'tujuan_tipe'      => $tujuanTipe,
+                    'tujuan_satker_id' => null,
+                    'tujuan_user_id'   => null,
+                ]);
+
+                RiwayatSurat::create([
+                    'surat_id'    => $suratMasuk->id,
+                    'user_id'     => $user->id,
+                    'status_aksi' => 'Surat Masuk Internal',
+                    'catatan'     => 'Surat dikirim ke BAU. Menunggu verifikasi BAU.'
+                ]);
+            }
+
+            $adminBAUIds = \App\Models\User::where('role', 'bau')->pluck('id')->toArray();
+            if (!empty($adminBAUIds)) {
+                $detailsBAU = [
+                    'subject'    => 'Pemberitahuan Surat Masuk Baru (Tujuan Rektor)',
+                    'greeting'   => 'Halo Tim BAU,',
+                    'body'       => "Ada surat internal baru dari {$namaPengirim} yang ditujukan ke Rektor/Universitas. Surat ini memerlukan verifikasi Anda sebelum diteruskan.\n\n" .
+                                    "No. Surat: {$request->nomor_surat}\n" .
+                                    "Perihal: {$request->perihal}",
+                    'actiontext' => 'Verifikasi Surat di BAU',
+                    'actionurl'  => $link,
+                    'file_url'   => asset('storage/' . $path)
+                ];
+                \App\Helpers\EmailHelper::kirimNotif($adminBAUIds, $detailsBAU);
+            }
+        }
+
+    }); 
+
+    return redirect()->route('satker.surat-keluar.internal')
+                     ->with('success', 'Surat berhasil dikirim.');
+}
 
     public function edit($id)
     {
@@ -573,183 +729,509 @@ Silakan cek sistem e-Surat: {$link}";
                          ->with('success', 'Data surat berhasil diperbarui dan disinkronkan.');
     }
 
-    public function destroy($id)
-    {
-        $surat = SuratKeluar::where('id', $id)->where('user_id', Auth::id())->firstOrFail();
-        if ($surat->file_surat && Storage::exists($surat->file_surat)) {
-            Storage::delete($surat->file_surat);
-        }
-        $surat->delete();
-        return redirect()->route('satker.surat-keluar.internal')->with('success', 'Surat berhasil dihapus.');
-    }
+public function destroy($id)
+{
+    // 1. Cari data milik user yang sedang login
+    $surat = SuratKeluar::where('id', $id)->where('user_id', Auth::id())->firstOrFail();
+
+    // 2. LOGIKA SOFT DELETE (MASUK TEMPAT SAMPAH)
+    // PENTING: Jangan Storage::delete() di sini agar file tetap ada jika surat di-restore.
+    $surat->delete(); 
+
+    // 3. Simpan Tipe untuk Redirect Dinamis
+    $routeTujuan = ($surat->tipe_kirim == 'internal') 
+        ? 'satker.surat-keluar.internal' 
+        : 'satker.surat-keluar.eksternal';
+
+    return redirect()->route($routeTujuan)->with('success', 'Surat berhasil dipindahkan ke tempat sampah.');
+}
 
     // --- METHOD BARU KHUSUS SURAT MASUK MANUAL ---
 
 // --- METHOD STORE SURAT MASUK MANUAL (REVISI MODEL SURAT) ---
 
+// SURAT MASUK INTERNAL
 public function storeMasukManual(Request $request)
-    {
-        // 1. Validasi Input
-        $request->validate([
-            'nomor_surat'    => 'required|string|max:255',
-            'asal_satker_id' => 'required|exists:satkers,id', // Khas Internal: Pilih Satker
-            'perihal'        => 'required|string',
-            'tanggal_surat'  => 'required|date',
-            'diterima_tanggal' => 'required|date', // Tambahkan ini agar sama dengan eksternal
-            'file_surat'     => 'required|file|mimes:pdf,jpg,jpeg,png|max:10240',
-            // Validasi Array Delegasi (Opsional)
-            'delegasi_user_ids'=> 'nullable|array',
-            'catatan_delegasi' => 'nullable|string',
+{
+    // 1. Validasi Input sesuai alur baru
+    $request->validate([
+        'nomor_surat'      => 'required|string|max:255',
+        'asal_satker_id'   => 'required|exists:satkers,id',
+        'perihal'          => 'required|string',
+        'tanggal_surat'    => 'required|date',
+        'diterima_tanggal' => 'required|date',
+        'file_surat'       => 'required|file|mimes:pdf,jpg,jpeg,png|max:10240',
+        'target_tipe'      => 'required|in:arsip,pribadi,semua',
+        // Validasi delegasi jika memilih 'pribadi'
+        'delegasi_user_ids'=> 'required_if:target_tipe,pribadi|array',
+        'catatan_delegasi' => 'nullable|string',
+    ]);
+
+    $user = Auth::user();
+    $path = $request->file('file_surat')->store('surat_masuk_internal_satker', 'public');
+
+    try {
+        DB::beginTransaction();
+
+        // Ambil Nama Satker Pengirim
+        $satkerPengirim = \App\Models\Satker::findOrFail($request->asal_satker_id);
+
+        // A. Simpan Surat Utama
+        $surat = \App\Models\Surat::create([
+            'user_id'          => $user->id,
+            'tipe_surat'       => 'internal',
+            'nomor_surat'      => $request->nomor_surat,
+            'surat_dari'       => $satkerPengirim->nama_satker,
+            'perihal'          => $request->perihal,
+            'tanggal_surat'    => $request->tanggal_surat,
+            'diterima_tanggal' => $request->diterima_tanggal,
+            'file_surat'       => $path,
+            'sifat'            => 'Asli',
+            'no_agenda'        => 'MI-' . time(),
+            'tujuan_tipe'      => 'satker',
+            'tujuan_satker_id' => $user->satker_id,
+            'status'           => 'arsip_satker', // Otomatis dianggap diproses oleh admin
         ]);
 
-        $user = Auth::user();
-        $path = $request->file('file_surat')->store('surat-masuk-internal', 'public');
+        $penerimaNotifIds = [];
+        $statusAksiLog = '';
 
-        // Gunakan Transaksi DB
-        DB::transaction(function() use ($request, $user, $path) {
-            
-            // TENTUKAN STATUS AWAL
-            // Sama seperti Eksternal, kita set 'arsip_satker'
-            $statusAwal = 'arsip_satker';
+        // B. PROSES DISTRIBUSI & EMAIL
+        if ($request->target_tipe == 'pribadi') {
+            // --- DISPOSISI PRIBADI ---
+            $statusAksiLog = 'Input & Disposisi Pribadi';
+            $penerimaNotifIds = $request->delegasi_user_ids;
 
-            // Ambil Nama Satker Pengirim (Khas Internal)
-            $satkerPengirim = \App\Models\Satker::findOrFail($request->asal_satker_id);
-
-            // A. Simpan Surat
-            $surat = \App\Models\Surat::create([
-                'user_id'          => $user->id,
-                'tipe_surat'       => 'internal', // <--- Bedanya disini
-                'nomor_surat'      => $request->nomor_surat,
-                'surat_dari'       => $satkerPengirim->nama_satker, // Simpan Nama Satker
-                'perihal'          => $request->perihal,
-                'tanggal_surat'    => $request->tanggal_surat,
-                'diterima_tanggal' => $request->diterima_tanggal,
-                'file_surat'       => $path,
-                'sifat'            => 'Asli',
-                'no_agenda'        => 'MI-' . time(), // MI = Masuk Internal
-                'tujuan_tipe'      => 'satker',
-                'tujuan_satker_id' => $user->satker_id,
-                'status'           => $statusAwal, // Status langsung Arsip/Selesai
-            ]);
-
-            // B. Proses Delegasi (Jika ada inputan pegawai)
-            if ($request->has('delegasi_user_ids') && count($request->delegasi_user_ids) > 0) {
-                
-                $catatan = $request->catatan_delegasi;
-                $userIds = $request->delegasi_user_ids;
-
-                // Attach ke tabel pivot
-                $surat->delegasiPegawai()->attach($userIds, [
-                    'catatan'    => $catatan,
-                    'created_at' => now(),
-                    'updated_at' => now(),
-                ]);
-
-                // Simpan Riwayat
+            foreach ($penerimaNotifIds as $pId) {
                 \App\Models\RiwayatSurat::create([
                     'surat_id'    => $surat->id,
                     'user_id'     => $user->id,
-                    'status_aksi' => 'Input & Delegasi (Internal)',
-                    'catatan'     => 'Surat internal diinput manual dan didelegasikan ke ' . count($userIds) . ' pegawai.'
-                ]);
-
-                // Notif WA (Opsional - Jika ada class WaService)
-                try {
-                    $pegawais = \App\Models\User::whereIn('id', $userIds)->get();
-                    foreach ($pegawais as $p) {
-                        if ($p->no_hp) {
-                            $pesan = "📩 *Tugas Baru (Internal)*\n\nPerihal: {$surat->perihal}\nAsal: {$surat->surat_dari}\nSilakan cek sistem.";
-                            \App\Services\WaService::send($p->no_hp, $pesan);
-                        }
-                    }
-                } catch (\Exception $e) {}
-
-            } else {
-                // Jika tidak ada delegasi, catat sebagai Arsip Langsung
-                \App\Models\RiwayatSurat::create([
-                    'surat_id'    => $surat->id,
-                    'user_id'     => $user->id,
-                    'status_aksi' => 'Input Manual (Arsip Internal)',
-                    'catatan'     => 'Surat internal diinput manual dan langsung diarsipkan.'
+                    'penerima_id' => $pId,
+                    'status_aksi' => 'Disposisi: ' . $statusAksiLog,
+                    'catatan'     => $request->catatan_delegasi ?? 'Surat didelegasikan kepada Anda.'
                 ]);
             }
-        });
+            // Attach ke pivot untuk sinkronisasi relasi
+            $surat->delegasiPegawai()->attach($penerimaNotifIds, [
+                'catatan' => $request->catatan_delegasi,
+                'created_at' => now(), 'updated_at' => now()
+            ]);
 
-        return redirect()->back()->with('success', 'Surat masuk internal berhasil disimpan.');
+        } elseif ($request->target_tipe == 'semua') {
+            // --- SEBAR KE SEMUA PEGAWAI SATKER ---
+            $statusAksiLog = 'Input & Informasi Umum';
+            $pegawaiSatker = \App\Models\User::where('satker_id', $user->satker_id)
+                                ->where('id', '!=', $user->id)
+                                ->get();
+
+            foreach ($pegawaiSatker as $p) {
+                \App\Models\RiwayatSurat::create([
+                    'surat_id'    => $surat->id,
+                    'user_id'     => $user->id,
+                    'penerima_id' => $p->id,
+                    'status_aksi' => 'Informasi Umum: ' . $statusAksiLog,
+                    'catatan'     => $request->catatan_delegasi ?? 'Informasi untuk seluruh pegawai.'
+                ]);
+                $penerimaNotifIds[] = $p->id;
+            }
+            // Attach ke pivot
+            $surat->delegasiPegawai()->attach($penerimaNotifIds, [
+                'catatan' => $request->catatan_delegasi,
+                'created_at' => now(), 'updated_at' => now()
+            ]);
+
+        } else {
+            // --- HANYA ARSIP ---
+            $statusAksiLog = 'Input Manual (Arsip)';
+            \App\Models\RiwayatSurat::create([
+                'surat_id'    => $surat->id,
+                'user_id'     => $user->id,
+                'status_aksi' => $statusAksiLog,
+                'catatan'     => 'Surat internal diinput manual sebagai arsip.'
+            ]);
+        }
+
+        DB::commit();
+
+        // C. KIRIM EMAIL NOTIFIKASI
+        if (!empty($penerimaNotifIds)) {
+            $details = [
+                'subject'    => '[DISPOSISI INTERNAL]: ' . $surat->perihal,
+                'greeting'   => 'Halo,',
+                'body'       => "Admin Satker baru saja mencatat surat masuk internal dan mendisposisikannya kepada Anda.\n\n" .
+                                "No. Surat: {$surat->nomor_surat}\n" .
+                                "Asal Satker: {$surat->surat_dari}\n" .
+                                "Instruksi: " . ($request->catatan_delegasi ?? 'Segera cek sistem.'),
+                'actiontext' => 'Lihat Surat',
+                'actionurl'  => route('login'),
+                'file_url'   => asset('storage/' . $surat->file_surat)
+            ];
+
+            // Panggil EmailHelper yang sudah ada
+            \App\Helpers\EmailHelper::kirimNotif($penerimaNotifIds, $details);
+        }
+
+        return redirect()->back()->with('success', 'Surat masuk internal berhasil dicatat dan diproses.');
+
+    } catch (\Exception $e) {
+        DB::rollBack();
+        return redirect()->back()->with('error', 'Gagal memproses surat: ' . $e->getMessage());
     }
+}
 
 // --- UPDATE SURAT MASUK MANUAL ---
 
 public function updateMasukManual(Request $request, $id)
 {
-    // Gunakan Model SURAT
-    $surat = Surat::findOrFail($id);
+    // 1. Ambil data surat
+    $surat = \App\Models\Surat::findOrFail($id);
+    $user = Auth::user();
 
-    // Cek Kepemilikan (Pastikan yang edit adalah User di Satker tujuan yang sama)
-    if ($surat->tujuan_satker_id != Auth::user()->satker_id) {
-        return abort(403, 'Anda tidak berhak mengedit surat ini.');
+    // 2. Proteksi Ganda: Cek Kepemilikan Satker & Cek apakah sudah diproses (Delegasi/Sebar)
+    $isAlreadyProcessed = $surat->riwayats->where('user_id', $user->id)->filter(function($r) {
+        $aksi = strtolower($r->status_aksi);
+        return str_contains($aksi, 'disposisi') || str_contains($aksi, 'informasi');
+    })->isNotEmpty();
+
+    if ($surat->tujuan_satker_id != $user->satker_id || $isAlreadyProcessed) {
+        return redirect()->back()->with('error', 'Maaf, surat tidak dapat diedit karena sudah didisposisikan/disebar atau Anda tidak memiliki akses.');
     }
 
+    // 3. Validasi Input
     $validator = Validator::make($request->all(), [
-        'nomor_surat'    => 'required',
+        'nomor_surat'    => 'required|string|max:255',
         'asal_satker_id' => 'required|exists:satkers,id',
-        'perihal'        => 'required',
+        'perihal'        => 'required|string',
         'tanggal_surat'  => 'required|date',
-        'file_surat'     => 'nullable|mimes:pdf,jpg,png|max:2048',
+        'file_surat'     => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:10240', // Limit 10MB
     ]);
 
     if ($validator->fails()) {
-        return redirect()->back()->withErrors($validator)->withInput()->with('error_code', 'edit')->with('edit_id', $id);
+        return redirect()->back()
+            ->withErrors($validator)
+            ->withInput()
+            ->with('error_code', 'edit')
+            ->with('edit_id', $id);
     }
 
     DB::beginTransaction();
     try {
+        // 4. Handle Pengirim (Satker)
+        $satkerPengirim = \App\Models\Satker::findOrFail($request->asal_satker_id);
+
+        // 5. Handle File Update
         if ($request->hasFile('file_surat')) {
-            if ($surat->file_surat) Storage::delete('public/' . $surat->file_surat);
-            $surat->file_surat = $request->file('file_surat')->store('surat-masuk', 'public');
+            // Hapus file lama jika ada
+            if ($surat->file_surat && Storage::disk('public')->exists($surat->file_surat)) {
+                Storage::disk('public')->delete($surat->file_surat);
+            }
+            // Simpan file baru di folder yang sama dengan store
+            $surat->file_surat = $request->file('file_surat')->store('surat_masuk_internal_satker', 'public');
         }
 
-        $satkerPengirim = Satker::findOrFail($request->asal_satker_id);
-
-        $surat->nomor_surat = $request->nomor_surat;
-        $surat->surat_dari  = $satkerPengirim->nama_satker; // Update nama pengirim
-        $surat->perihal     = $request->perihal;
+        // 6. Update Data Utama
+        $surat->nomor_surat   = $request->nomor_surat;
+        $surat->surat_dari    = $satkerPengirim->nama_satker; 
+        $surat->perihal       = $request->perihal;
         $surat->tanggal_surat = $request->tanggal_surat;
         
         $surat->save();
 
+        // 7. Catat Riwayat Perubahan (Audit Trail)
+        \App\Models\RiwayatSurat::create([
+            'surat_id'    => $surat->id,
+            'user_id'     => $user->id,
+            'status_aksi' => 'Update Data Manual',
+            'catatan'     => 'Admin Satker memperbarui detail informasi surat manual internal.'
+        ]);
+
         DB::commit();
-        return redirect()->back()->with('success', 'Data surat berhasil diperbarui.');
+        return redirect()->back()->with('success', 'Data surat manual berhasil diperbarui.');
 
     } catch (\Exception $e) {
         DB::rollBack();
-        return redirect()->back()->with('error', 'Gagal update: ' . $e->getMessage());
+        return redirect()->back()->with('error', 'Gagal memperbarui data: ' . $e->getMessage());
     }
 }
 
 // --- HAPUS SURAT MASUK MANUAL ---
-
 public function destroyMasukManual($id)
 {
-    $surat = Surat::findOrFail($id);
+    // 1. Ambil data surat
+    $surat = \App\Models\Surat::findOrFail($id);
+    $user = Auth::user();
 
-    if ($surat->tujuan_satker_id != Auth::user()->satker_id) {
-        return abort(403, 'Anda tidak berhak menghapus surat ini.');
+    // 2. Proteksi Ganda: Cek Kepemilikan & Cek apakah sudah diproses (Delegasi/Sebar)
+    $isAlreadyProcessed = $surat->riwayats->where('user_id', $user->id)->filter(function($r) {
+        $aksi = strtolower($r->status_aksi);
+        return str_contains($aksi, 'disposisi') || str_contains($aksi, 'informasi');
+    })->isNotEmpty();
+
+    if ($surat->tujuan_satker_id != $user->satker_id || $isAlreadyProcessed) {
+        return redirect()->back()->with('error', 'Tidak bisa menghapus surat yang sudah didisposisikan/disebar atau bukan milik Anda.');
     }
 
     try {
-        if ($surat->file_surat) Storage::delete('public/' . $surat->file_surat);
-        
-        // Hapus Delegasi
-        $surat->delegasiPegawai()->detach();
-        
-        // Hapus Surat
+        DB::beginTransaction();
+
+        // 3. Eksekusi Soft Delete
+        // JANGAN hapus file surat dan JANGAN detach delegasi agar bisa di-restore nantinya
         $surat->delete();
 
-        return redirect()->back()->with('success', 'Surat berhasil dihapus.');
+        // 4. Catat Riwayat Penghapusan
+        \App\Models\RiwayatSurat::create([
+            'surat_id'    => $surat->id,
+            'user_id'     => $user->id,
+            'status_aksi' => 'Hapus ke Tempat Sampah',
+            'catatan'     => 'Admin Satker memindahkan surat manual internal ke tempat sampah.'
+        ]);
+
+        DB::commit();
+        return redirect()->back()->with('success', 'Surat berhasil dipindahkan ke tempat sampah.');
 
     } catch (\Exception $e) {
-        return redirect()->back()->with('error', 'Gagal menghapus: ' . $e->getMessage());
+        DB::rollBack();
+        return redirect()->back()->with('error', 'Gagal memindahkan ke tempat sampah: ' . $e->getMessage());
     }
+}
+
+// log status satker surat kelaur internal
+public function getRiwayatStatus($id)
+{
+    try {
+        // Load relasi penerimaInternal agar data pivot tersedia
+        $suratKeluar = \App\Models\SuratKeluar::with('penerimaInternal')->findOrFail($id);
+        $listRiwayat = [];
+
+        // --- A. LOG AWAL: SURAT DIKIRIM ---
+        $listRiwayat[] = [
+            'status_aksi' => 'Surat Dikirim',
+            'catatan'     => 'Surat dikirim dari Satker asal.',
+            'created_at'  => $suratKeluar->created_at->toISOString(),
+            'user'        => ['name' => 'Admin Pengirim'] 
+        ];
+
+        // --- B. LOGIKA SURAT KE REKTOR/BAU (Pusat) ---
+        $suratMasukPusat = \App\Models\Surat::where('nomor_surat', $suratKeluar->nomor_surat)
+                            ->with('riwayats.user')
+                            ->first();
+
+        if ($suratMasukPusat) {
+            foreach($suratMasukPusat->riwayats as $log) {
+                $listRiwayat[] = [
+                    'status_aksi' => $log->status_aksi,
+                    'catatan'     => $log->catatan,
+                    'created_at'  => $log->created_at->toISOString(),
+                    'user'        => ['name' => $log->user ? $log->user->name : 'Sistem Pusat']
+                ];
+            }
+        }
+
+        // --- C. LOGIKA SURAT ANTAR SATKER (Penerima Langsung) ---
+        if ($suratKeluar->penerimaInternal->isNotEmpty()) {
+            foreach ($suratKeluar->penerimaInternal as $penerima) {
+                $status = $penerima->pivot->is_read ?? 0;
+                $labelSatker = $penerima->nama_satker;
+
+                // Log: Kapan Surat Masuk ke Inbox Satker Tujuan
+                $listRiwayat[] = [
+                    'status_aksi' => 'Diterima di ' . $labelSatker,
+                    'catatan'     => 'Surat telah masuk ke daftar surat masuk ' . $labelSatker,
+                    'created_at'  => $penerima->pivot->created_at->toISOString(),
+                    'user'        => ['name' => 'Sistem']
+                ];
+
+                // Log: Jika Sudah Dibaca
+                if ($status >= 1) {
+                    $listRiwayat[] = [
+                        'status_aksi' => 'Dibaca oleh ' . $labelSatker,
+                        'catatan'     => 'Surat telah dibuka dan dibaca oleh Admin ' . $labelSatker,
+                        'created_at'  => $penerima->pivot->updated_at->toISOString(),
+                        'user'        => ['name' => 'Admin ' . $labelSatker]
+                    ];
+                }
+
+                // Log: Jika Sudah Diarsipkan
+                if ($status == 2) {
+                    $listRiwayat[] = [
+                        'status_aksi' => 'Selesai / Arsip ' . $labelSatker,
+                        'catatan'     => 'Surat telah ditindaklanjuti dan diarsipkan oleh ' . $labelSatker,
+                        'created_at'  => $penerima->pivot->updated_at->toISOString(),
+                        'user'        => ['name' => 'Admin ' . $labelSatker]
+                    ];
+                }
+            }
+        }
+
+        // --- D. URUTKAN LOG (TIME ASCENDING) ---
+        // Menghapus duplikasi jika ada (berdasarkan catatan & waktu yang sama persis)
+        $uniqueRiwayat = collect($listRiwayat)->unique(function ($item) {
+            return $item['status_aksi'].$item['created_at'];
+        })->values()->toArray();
+
+        usort($uniqueRiwayat, function($a, $b) {
+            return strtotime($a['created_at']) - strtotime($b['created_at']);
+        });
+
+        return response()->json([
+            'nomor_surat' => $suratKeluar->nomor_surat,
+            'riwayats'    => $uniqueRiwayat
+        ]);
+
+    } catch (\Throwable $e) {
+        return response()->json(['error' => true, 'message' => $e->getMessage()], 500);
+    }
+}
+// arsip
+public function arsipkan($id)
+{
+    try {
+        // 1. Cari Suratnya
+        $surat = \App\Models\SuratKeluar::findOrFail($id);
+        
+        // 2. Ambil ID Satker User yang sedang login
+        $satkerSaya = Auth::user()->satker_id;
+
+        // 3. Update HANYA data pivot milik Satker ini
+        // updateExistingPivot(id_relasi, [data_baru])
+        $surat->penerimaInternal()->updateExistingPivot($satkerSaya, [
+            'is_read' => 2 // Kita set 2 sebagai kode "Diarsipkan"
+        ]);
+
+        return redirect()->back()->with('success', 'Surat berhasil diarsipkan dari inbox Satker Anda.');
+
+    } catch (\Exception $e) {
+        return redirect()->back()->with('error', 'Gagal memproses: ' . $e->getMessage());
+    }
+}
+
+// log surat masuk internal
+public function getRiwayatMasuk($id)
+{
+    try {
+        $listRiwayat = [];
+        $nomor = '-';
+
+        // 1. Coba cari di SuratKeluar (Surat kiriman satker lain)
+        $suratKeluar = \App\Models\SuratKeluar::with(['user.satker', 'riwayats.penerima', 'riwayats.user'])->find($id);
+
+        if ($suratKeluar) {
+            $nomor = $suratKeluar->nomor_surat;
+            
+            $namaPengirim = 'Satker Pengirim';
+            if ($suratKeluar->user && $suratKeluar->user->satker) {
+                $namaPengirim = $suratKeluar->user->satker->nama_satker;
+            }
+
+            // --- A. Log Pengiriman ---
+            $listRiwayat[] = [
+                'status_aksi' => 'Surat Masuk',
+                'catatan'     => 'Surat diterima dari ' . $namaPengirim,
+                'created_at'  => $suratKeluar->created_at->toISOString(),
+                'tanggal_f'   => $suratKeluar->created_at->isoFormat('D MMMM Y, HH:mm') . ' WIB',
+                'user'        => ['name' => 'Admin ' . $namaPengirim]
+            ];
+
+            // --- B. Log Aktivitas SAYA (Satker Penerima) ---
+            $myPivot = $suratKeluar->penerimaInternal()
+                                   ->where('satker_id', auth()->user()->satker_id)
+                                   ->first();
+
+            if ($myPivot) {
+                $waktu = $myPivot->pivot->updated_at ?? $myPivot->pivot->created_at;
+                $waktuISO = $waktu ? \Carbon\Carbon::parse($waktu)->toISOString() : null;
+                $waktuFmt = $waktu ? \Carbon\Carbon::parse($waktu)->isoFormat('D MMMM Y, HH:mm') . ' WIB' : '-';
+
+                // Log untuk Dibaca
+                if ($myPivot->pivot->is_read >= 1) { 
+                    $listRiwayat[] = [
+                        'status_aksi' => 'Dibaca',
+                        'catatan'     => 'Surat telah dibuka/dibaca oleh Admin Satker.',
+                        'created_at'  => \Carbon\Carbon::parse($myPivot->pivot->created_at)->toISOString(), // Gunakan created_at pivot untuk log baca pertama
+                        'tanggal_f'   => \Carbon\Carbon::parse($myPivot->pivot->created_at)->isoFormat('D MMMM Y, HH:mm') . ' WIB',
+                        'user'        => ['name' => auth()->user()->name]
+                    ];
+                }
+
+                // Log untuk Diarsipkan Manual
+                if ($myPivot->pivot->is_read == 2) {
+                    $listRiwayat[] = [
+                        'status_aksi' => 'Diarsipkan',
+                        'catatan'     => 'Surat telah diselesaikan/diarsipkan oleh Satker Anda.',
+                        'created_at'  => $waktuISO,
+                        'tanggal_f'   => $waktuFmt,
+                        'user'        => ['name' => auth()->user()->name]
+                    ];
+                }
+            }
+
+            // --- C. Tambahan Log Delegasi ke Pegawai (Riwayat) ---
+            $myRiwayats = $suratKeluar->riwayats->where('user_id', auth()->id());
+            foreach ($myRiwayats as $riwayat) {
+                if (stripos($riwayat->status_aksi, 'Delegasi') !== false) {
+                    $namaPegawai = $riwayat->penerima->name ?? 'Pegawai';
+                    $listRiwayat[] = [
+                        'status_aksi' => 'Didelegasikan ke: ' . $namaPegawai,
+                        'catatan'     => $riwayat->catatan,
+                        'created_at'  => $riwayat->created_at->toISOString(),
+                        'tanggal_f'   => $riwayat->created_at->isoFormat('D MMMM Y, HH:mm') . ' WIB',
+                        'user'        => ['name' => auth()->user()->name]
+                    ];
+                }
+            }
+
+        } else {
+            // --- KASUS 2: SURAT INPUTAN MANUAL ---
+            $suratManual = \App\Models\Surat::with('user')->find($id);
+            if ($suratManual) {
+                $nomor = $suratManual->nomor_surat;
+                $listRiwayat[] = [
+                    'status_aksi' => 'Input Manual',
+                    'catatan'     => 'Surat dicatat secara manual ke dalam sistem.',
+                    'created_at'  => $suratManual->created_at->toISOString(),
+                    'tanggal_f'   => $suratManual->created_at->isoFormat('D MMMM Y, HH:mm') . ' WIB',
+                    'user'        => ['name' => $suratManual->user->name ?? 'Saya']
+                ];
+            } else {
+                return response()->json(['error' => true, 'message' => 'Data surat tidak ditemukan'], 404);
+            }
+        }
+
+        // Urutkan Timeline
+        usort($listRiwayat, function($a, $b) {
+            return strtotime($a['created_at']) - strtotime($b['created_at']);
+        });
+
+        return response()->json([
+            'status'      => 'success',
+            'nomor_surat' => $nomor,
+            'perihal'     => $suratKeluar ? $suratKeluar->perihal : ($suratManual->perihal ?? '-'),
+            'riwayats'    => $listRiwayat
+        ]);
+
+    } catch (\Throwable $e) {
+        return response()->json(['error' => true, 'message' => 'Server Error: ' . $e->getMessage()], 500);
+    }
+}
+
+
+// METOD UNTUK MENGETAHUI KAPAN SATKER MEMBACA SURAT DARI REKTOR LANGSUNG
+public function show($id)
+{
+    $surat = \App\Models\SuratKeluar::findOrFail($id);
+    $satkerId = Auth::user()->satker_id;
+
+    // Ambil data pivot untuk cek status saat ini
+    $pivotData = $surat->penerimaInternal()->where('satker_id', $satkerId)->first();
+
+    // Jika statusnya masih 0 (Baru), ubah jadi 1 (Dibaca)
+    if ($pivotData && $pivotData->pivot->is_read == 0) {
+        $surat->penerimaInternal()->updateExistingPivot($satkerId, [
+            'is_read' => 1,
+            'updated_at' => now() // Penting agar terekam di Log BAU
+        ]);
+    }
+
+    return view('satker.surat_masuk.show', compact('surat'));
 }
 }

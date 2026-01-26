@@ -66,68 +66,116 @@
                 @csrf
                 <input type="hidden" name="tipe_kirim" value="{{ $tipe }}">
 
-                {{-- BARIS 1: Nomor Surat & Tujuan --}}
-                <div class="row">
-                    <div class="col-md-6 mb-3 position-relative">
-                        <label class="form-label">Nomor Surat <span class="text-danger">*</span></label>
-                        {{-- PERBAIKAN: value="{{ old('nomor_surat') }}" agar tidak hilang --}}
-                        <input type="text" name="nomor_surat" id="nomor_surat" 
-                               class="form-control @error('nomor_surat') is-invalid @enderror" 
-                               value="{{ old('nomor_surat') }}" 
-                               placeholder="Contoh: 005/BAU/2025" required>
-                        
-                        {{-- Pesan Error JS (Client Side) --}}
-                        <div class="invalid-feedback" id="error-nomor_surat_js">
-                            Nomor surat ini sudah ada di database!
-                        </div>
-                        
-                        {{-- Pesan Error Laravel (Server Side) --}}
-                        @error('nomor_surat')
-                            <div class="invalid-feedback d-block">{{ $message }}</div>
-                        @enderror
-                    </div>
+              {{-- BARIS 1: Nomor Surat & Tujuan --}}
+<div class="row">
+    <div class="col-md-6 mb-3 position-relative">
+        <label class="form-label">Nomor Surat <span class="text-danger">*</span></label>
+        <input type="text" name="nomor_surat" id="nomor_surat" 
+               class="form-control @error('nomor_surat') is-invalid @enderror" 
+               value="{{ old('nomor_surat') }}" 
+               placeholder="Contoh: 005/BAU/2025" required>
+        <div class="invalid-feedback" id="error-nomor_surat_js">Nomor surat ini sudah ada!</div>
+        @error('nomor_surat')
+            <div class="invalid-feedback d-block">{{ $message }}</div>
+        @enderror
+    </div>
 
-                    <div class="col-md-6 mb-3">
-                        @if($tipe == 'internal')
-                            <label class="form-label">Tujuan Surat (Internal) <span class="text-danger">*</span></label>
-                            <select name="tujuan_satker_ids[]" class="form-select select2" multiple="multiple" required>
-                                <optgroup label="Pimpinan">
-                                    <option value="rektor" {{ collect(old('tujuan_satker_ids'))->contains('rektor') ? 'selected' : '' }}>Rektor/Universitas</option>
-                                </optgroup>
-                                <optgroup label="Satuan Kerja">
-                                    @foreach($daftarSatker as $satker)
-                                        {{-- PERBAIKAN: Logic 'selected' agar pilihan tidak hilang --}}
-                                        <option value="{{ $satker->id }}" {{ collect(old('tujuan_satker_ids'))->contains($satker->id) ? 'selected' : '' }}>
-                                            {{ $satker->nama_satker }}
-                                        </option>
-                                    @endforeach
-                                </optgroup>
-                            </select>
-                        @else
-                            <label class="form-label">Tujuan Surat (Eksternal) <span class="text-danger">*</span></label>
-                            <input type="text" name="tujuan_luar" class="form-control @error('tujuan_luar') is-invalid @enderror" 
-                                   value="{{ old('tujuan_luar') }}" 
-                                   placeholder="Contoh: Dinas Pendidikan, PT. Telkom" required>
-                        @endif
+    <div class="col-md-6 mb-3">
+        @if($tipe == 'internal')
+            <label class="form-label">Tipe Tujuan <span class="text-danger">*</span></label>
+            <div class="mb-2">
+                <div class="form-check form-check-inline">
+                    <input class="form-check-input" type="radio" name="tujuan_tipe" id="tipe_satker" value="satker" checked>
+                    <label class="form-check-label" for="tipe_satker">Satuan Kerja (Umum)</label>
+                </div>
+                <div class="form-check form-check-inline">
+                    <input class="form-check-input" type="radio" name="tujuan_tipe" id="tipe_pegawai" value="pegawai">
+                    <label class="form-check-label" for="tipe_pegawai">Pegawai Spesifik (Personal)</label>
+                </div>
+            </div>
+
+            {{-- Container Dropdown Satker --}}
+            <div id="container-satker">
+                <label class="form-label">Pilih Satker Tujuan</label>
+                <select name="tujuan_satker_ids[]" id="select-satker" class="form-select select2" multiple="multiple">
+                    <optgroup label="Pimpinan">
+                        <option value="rektor">Rektor/Universitas</option>
+                    </optgroup>
+                    <optgroup label="Satuan Kerja">
+                        @foreach($daftarSatker as $satker)
+                            <option value="{{ $satker->id }}">{{ $satker->nama_satker }}</option>
+                        @endforeach
+                    </optgroup>
+                </select>
+            </div>
+
+            {{-- Container Dropdown Pegawai (Hidden by Default) --}}
+            <div id="container-pegawai" class="d-none mt-2">
+                <div class="row">
+                    <div class="col-md-6">
+                        <label class="form-label small text-muted">Filter Satker Pegawai</label>
+                        <select id="filter-satker-pegawai" class="form-select form-select-sm">
+                            <option value="">-- Pilih Satker --</option>
+                            @foreach($daftarSatker as $satker)
+                                <option value="{{ $satker->id }}">{{ $satker->nama_satker }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small text-muted">Pilih Pegawai <span class="text-danger">*</span></label>
+                        <select name="tujuan_user_id" id="select-pegawai" class="form-select select2" style="width: 100%">
+                            <option value="">-- Pilih Pegawai --</option>
+                        </select>
                     </div>
                 </div>
+            </div>
+        @else
+            <label class="form-label">Tujuan Surat (Eksternal) <span class="text-danger">*</span></label>
+            <input type="text" name="tujuan_luar" class="form-control" value="{{ old('tujuan_luar') }}" placeholder="Dinas Pendidikan..." required>
+        @endif
+    </div>
+</div>
 
                 {{-- BARIS 2: Perihal & Tanggal --}}
-                <div class="row">
-                    <div class="col-md-6 mb-3">
-                        <label class="form-label">Perihal <span class="text-danger">*</span></label>
-                        <input type="text" name="perihal" class="form-control @error('perihal') is-invalid @enderror" 
-                               value="{{ old('perihal') }}" required>
-                        @error('perihal')
-                            <div class="invalid-feedback d-block">{{ $message }}</div>
-                        @enderror
-                    </div>
-                    <div class="col-md-6 mb-3">
-                        <label class="form-label">Tanggal Surat <span class="text-danger">*</span></label>
-                        <input type="date" name="tanggal_surat" class="form-control @error('tanggal_surat') is-invalid @enderror" 
-                               value="{{ old('tanggal_surat', date('Y-m-d')) }}" required>
-                    </div>
-                </div>
+               {{-- BARIS 2: Perihal, No. Agenda (Kondisional), & Tanggal --}}
+<div class="row">
+    {{-- Input Perihal --}}
+    <div class="col-md-6 mb-3">
+        <label class="form-label">Perihal <span class="text-danger">*</span></label>
+        <input type="text" name="perihal" class="form-control @error('perihal') is-invalid @enderror" 
+               value="{{ old('perihal') }}" required>
+        @error('perihal')
+            <div class="invalid-feedback d-block">{{ $message }}</div>
+        @enderror
+    </div>
+
+    {{-- Input Tanggal --}}
+    <div class="col-md-6 mb-3">
+        <label class="form-label">Tanggal Surat <span class="text-danger">*</span></label>
+        <input type="date" name="tanggal_surat" class="form-control @error('tanggal_surat') is-invalid @enderror" 
+               value="{{ old('tanggal_surat', date('Y-m-d')) }}" required>
+    </div>
+</div>
+
+{{-- INPUT NO AGENDA (KHUSUS REKTOR) --}}
+{{-- Default hidden (d-none). Akan muncul via JS jika tujuan = Rektor --}}
+<div class="row d-none" id="row-no-agenda">
+    <div class="col-md-12 mb-3">
+        <label class="form-label fw-bold text-primary">
+            Nomor Agenda (Khusus Rektor) <span class="text-danger">*</span>
+        </label>
+        <input type="text" name="no_agenda" id="input-no-agenda" 
+               class="form-control @error('no_agenda') is-invalid @enderror"
+               value="{{ old('no_agenda') }}"
+               placeholder="Masukkan Nomor Agenda Khusus...">
+        <small class="text-muted fst-italic">
+            Wajib diisi karena surat ditujukan kepada Rektor/Universitas.
+        </small>
+        @error('no_agenda')
+            <div class="invalid-feedback d-block">{{ $message }}</div>
+        @enderror
+    </div>
+</div>
 
                 {{-- BARIS 3: File Surat --}}
                 <div class="row">
@@ -175,6 +223,32 @@
         // 1. Init Select2
         if ($('.select2').length > 0) {
             $('.select2').select2({ theme: 'bootstrap-5', placeholder: 'Pilih Tujuan...', allowClear: true });
+            // Ambil elemen
+    var selectTujuan = $('select[name="tujuan_satker_ids[]"]');
+    var rowAgenda = $('#row-no-agenda');
+    var inputAgenda = $('#input-no-agenda');
+
+    // Fungsi Cek Tujuan Rektor
+    function checkTujuanRektor() {
+        // Ambil value yang dipilih (array)
+        var selectedValues = selectTujuan.val();
+
+        // Cek apakah 'rektor' ada di dalam array pilihan
+        if (selectedValues && selectedValues.includes('rektor')) {
+            rowAgenda.removeClass('d-none'); // Tampilkan
+            inputAgenda.prop('required', true); // Wajib diisi
+        } else {
+            rowAgenda.addClass('d-none'); // Sembunyikan
+            inputAgenda.prop('required', false); // Tidak wajib
+            inputAgenda.val(''); // Reset nilai (opsional)
+        }
+    }
+
+    // Jalankan saat Select2 berubah
+    selectTujuan.on('change', checkTujuanRektor);
+
+    // Jalankan sekali saat halaman dimuat (untuk handle old input saat validasi gagal)
+    checkTujuanRektor();
         }
 
         // 2. Cek Duplikat Nomor Surat (AJAX)
@@ -257,5 +331,63 @@
         });
 
     });
+
+    $(document).ready(function() {
+    // 1. Logika Toggle Tipe Tujuan
+    $('input[name="tujuan_tipe"]').on('change', function() {
+        if ($(this).val() === 'pegawai') {
+            $('#container-satker').addClass('d-none');
+            $('#container-pegawai').removeClass('d-none');
+            $('#select-satker').val(null).trigger('change').prop('required', false);
+            $('#select-pegawai').prop('required', true);
+        } else {
+            $('#container-satker').removeClass('d-none');
+            $('#container-pegawai').addClass('d-none');
+            $('#select-pegawai').val(null).trigger('change').prop('required', false);
+            $('#select-satker').prop('required', true);
+        }
+    });
+
+    // 2. AJAX Dependent Dropdown: Ambil Pegawai berdasarkan Satker
+    $('#filter-satker-pegawai').on('change', function() {
+        let satkerId = $(this).val();
+        let $pegawaiSelect = $('#select-pegawai');
+
+        // Reset dropdown pegawai
+        $pegawaiSelect.html('<option value="">Sedang memuat...</option>');
+
+        if (satkerId) {
+            $.ajax({
+               url: "{{ route('bau.surat-keluar.get-pegawai-by-satker') }}",
+                type: "GET",
+                data: { satker_id: satkerId },
+                success: function(response) {
+                    $pegawaiSelect.html('<option value="">-- Pilih Pegawai --</option>');
+                    $.each(response, function(key, item) {
+                        $pegawaiSelect.append(`<option value="${item.id}">${item.name} (${item.role})</option>`);
+                    });
+                },
+                error: function() {
+                    alert('Gagal mengambil data pegawai.');
+                }
+            });
+        } else {
+            $pegawaiSelect.html('<option value="">-- Pilih Pegawai --</option>');
+        }
+    });
+
+    // 3. Logika Munculkan Nomor Agenda jika Rektor dipilih
+    $('#select-satker').on('change', function() {
+        let selectedValues = $(this).val() || [];
+        if (selectedValues.includes('rektor')) {
+            $('#row-no-agenda').removeClass('d-none');
+            $('#input-no-agenda').prop('required', true);
+        } else {
+            $('#row-no-agenda').addClass('d-none');
+            $('#input-no-agenda').prop('required', false).val('');
+        }
+    });
+});
 </script>
+
 @endpush

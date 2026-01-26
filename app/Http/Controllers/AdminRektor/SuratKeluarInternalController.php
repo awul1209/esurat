@@ -5,6 +5,7 @@ namespace App\Http\Controllers\AdminRektor;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\SuratKeluar;
+use Carbon\Carbon;
 use App\Models\Satker;
 use App\Models\User; // Untuk ambil no_hp
 use Illuminate\Support\Facades\Auth;
@@ -47,119 +48,94 @@ class SuratKeluarInternalController extends Controller
     return view('admin_rektor.surat_keluar_internal.index', compact('suratKeluar'));
 }
 
-    public function create()
-    {
-        // Ambil semua satker kecuali satker admin rektor sendiri (opsional)
-        $satkers = Satker::orderBy('nama_satker', 'asc')->get();
-        return view('admin_rektor.surat_keluar_internal.create', compact('satkers'));
-    }
+// Contoh di AdminRektor/SuratKeluarInternalController.php
 
-    public function store(Request $request)
-    {
-        // 1. Validasi
-        $request->validate([
-            'nomor_surat'       => 'required|string|max:255|unique:surat_keluars,nomor_surat',
-            'tanggal_surat'     => 'required|date',
-            'perihal'           => 'required|string|max:255',
-            'file_surat'        => 'required|file|mimes:pdf,doc,docx,jpg,png|max:5120',
-            'tujuan_satker_ids' => 'required|array|min:1', 
-            'tujuan_satker_ids.*' => 'exists:satkers,id',
-        ], [
-            'nomor_surat.unique' => 'Nomor surat ini sudah terdaftar. Harap gunakan nomor lain.',
-            'tujuan_satker_ids.required' => 'Pilih setidaknya satu tujuan surat.'
+public function create()
+{
+    $satkers = Satker::orderBy('nama_satker', 'asc')->get();
+    return view('admin_rektor.surat_keluar_internal.create', compact('satkers'));
+}
+
+  public function store(Request $request)
+{
+    // 1. Validasi
+    $request->validate([
+        'nomor_surat'       => 'required|string|max:255|unique:surat_keluars,nomor_surat',
+        'tanggal_surat'     => 'required|date',
+        'perihal'           => 'required|string|max:255',
+        'file_surat'        => 'required|file|mimes:pdf,doc,docx,jpg,png|max:5120',
+        'tujuan_satker_ids' => 'required|array|min:1', 
+        'tujuan_satker_ids.*' => 'exists:satkers,id',
+    ], [
+        'nomor_surat.unique' => 'Nomor surat ini sudah terdaftar. Harap gunakan nomor lain.',
+        'tujuan_satker_ids.required' => 'Pilih setidaknya satu tujuan surat.'
+    ]);
+
+    $user = Auth::user();
+    
+    DB::beginTransaction();
+    try {
+        // 2. Upload File (Disimpan di folder surat_keluar)
+        $path = $request->file('file_surat')->store('sk_rektor_internal', 'public');
+
+        // 3. Simpan Data Surat
+        $surat = SuratKeluar::create([
+            'user_id'       => $user->id,
+            'nomor_surat'   => $request->nomor_surat,
+            'tanggal_surat' => $request->tanggal_surat,
+            'perihal'       => $request->perihal,
+            'file_surat'    => $path,
+            'tipe_kirim'    => 'internal',
+            'status'        => 'pending' // STATUS AWAL PENDING (Menunggu BAU)
         ]);
 
-        $user = Auth::user();
-        
-        DB::beginTransaction();
-        try {
-            // 2. Upload File
-            $path = $request->file('file_surat')->store('surat_keluar', 'public');
+        // 4. Simpan Relasi (Pivot) ke Banyak Satker
+        $surat->penerimaInternal()->attach($request->tujuan_satker_ids);
 
-            // 3. Simpan Data Surat
-            $surat = SuratKeluar::create([
-                'user_id'       => $user->id,
-                'nomor_surat'   => $request->nomor_surat,
-                'tanggal_surat' => $request->tanggal_surat,
-                'perihal'       => $request->perihal,
-                // 'isi_ringkas'   => $request->isi_ringkas, // Removed as per previous request
-                'file_surat'    => $path,
-                'tipe_kirim'    => 'internal',
-                'status'        => 'terkirim'
-            ]);
+        // ====================================================================
+        // 5. NOTIFIKASI EMAIL KE BAU (VERIFIKASI INTERNAL)
+        // ====================================================================
+        $bauUserIds = \App\Models\User::where('role', 'bau')->pluck('id')->toArray();
 
-            // 4. Simpan Relasi (Pivot) ke Banyak Satker
-            $surat->penerimaInternal()->attach($request->tujuan_satker_ids);
-
-            // 5. LOGIKA NOTIFIKASI WA MASSAL (UPDATED)
-            $this->kirimNotifikasiWa($surat, $request->tujuan_satker_ids);
-
-            DB::commit();
-            return redirect()->route('adminrektor.surat-keluar-internal.index')
-                             ->with('success', 'Surat internal berhasil dikirim ke Satker tujuan.');
-
-        } catch (\Exception $e) {
-            DB::rollBack();
-            return back()->with('error', 'Gagal mengirim surat: ' . $e->getMessage());
-        }
-    }
-
-    // --- HELPER NOTIFIKASI WA (UPDATED TO MATCH SATKER LOGIC) ---
-    private function kirimNotifikasiWa($surat, $satkerIds)
-    {
-        // 1. Ambil data pengirim (Admin Rektor)
-        // Jika Admin Rektor punya satker, ambil namanya. Jika tidak, pakai nama user.
-        $userPengirim = Auth::user();
-        $namaPengirim = $userPengirim->satker->nama_satker ?? 'Rektorat / Admin Rektor'; 
-        
-        $tglSurat = \Carbon\Carbon::parse($surat->tanggal_surat)->format('d-m-Y');
-        $link = route('login'); // Link ke aplikasi
-
-        // 2. Cari User Penerima (Admin/Operator di Satker Tujuan)
-        // Filter user yang role-nya relevan (misal: satker, bau, bapsi, admin)
-        $rolePenerima = ['satker', 'bau', 'bapsi', 'admin'];
-        
-        $penerimaNotif = User::whereIn('satker_id', $satkerIds)
-                             ->whereIn('role', $rolePenerima)
-                             ->whereNotNull('no_hp')
-                             ->get();
-
-        foreach ($penerimaNotif as $penerima) {
+        if (!empty($bauUserIds)) {
+            $tglSurat = \Carbon\Carbon::parse($request->tanggal_surat)->format('d-m-Y');
             
-            // 3. Pecah Nomor HP (Support Multiple Numbers Separated by Comma)
-            $daftarNomor = explode(',', $penerima->no_hp);
-            $namaTujuan = $penerima->satker->nama_satker ?? 'Satker Tujuan';
+            // Mengambil nama-nama satker tujuan untuk diinformasikan ke BAU
+            $namaSatkers = \App\Models\Satker::whereIn('id', $request->tujuan_satker_ids)
+                            ->pluck('nama_satker')
+                            ->toArray();
+            $tujuanStr = implode(', ', $namaSatkers);
 
-            // 4. Susun Pesan
-            $pesan = 
-"📩 *Notifikasi Surat Masuk Internal (Dari Rektorat)*
+            $details = [
+                'subject'    => '🔔 Verifikasi Surat Internal Rektorat: ' . $request->perihal,
+                'greeting'   => 'Yth. Tim BAU,',
+                'body'       => "Terdapat pengajuan surat keluar INTERNAL dari Rektorat yang memerlukan verifikasi dan penerusan oleh BAU.\n\n" .
+                                "No. Surat: {$request->nomor_surat}\n" .
+                                "Tujuan Satker: {$tujuanStr}\n" .
+                                "Tanggal Surat: {$tglSurat}\n" .
+                                "Perihal: {$request->perihal}\n\n" .
+                                "Mohon segera diproses agar surat dapat diterima oleh Satker tujuan.",
+                'actiontext' => 'Proses Verifikasi BAU',
+                'actionurl'  => route('login'), 
+                'file_url'   => asset('storage/' . $path)
+            ];
 
-Satker Tujuan : {$namaTujuan}
-Tanggal Surat : {$tglSurat}
-No. Surat     : {$surat->nomor_surat}
-Perihal       : {$surat->perihal}
-Pengirim      : {$namaPengirim}
-
-Silakan cek sistem e-Surat untuk detail dan disposisi: {$link}";
-
-            // 5. Loop Kirim ke Setiap Nomor
-            foreach ($daftarNomor as $nomor) {
-                // Bersihkan nomor
-                $nomorBersih = trim($nomor);
-                $nomorBersih = preg_replace('/[^0-9]/', '', $nomorBersih);
-
-                if (!empty($nomorBersih)) {
-                    try {
-                        // Panggil Service WA Anda
-                        WaService::send($nomorBersih, $pesan);
-                    } catch (\Exception $e) {
-                        // Log error jika perlu, tapi jangan hentikan proses transaksi
-                        // \Log::error("Gagal kirim WA ke $nomorBersih: " . $e->getMessage());
-                    }
-                }
-            }
+            \App\Helpers\EmailHelper::kirimNotif($bauUserIds, $details);
         }
+        // ====================================================================
+
+        DB::commit();
+        
+        return redirect()->route('adminrektor.surat-keluar-internal.index')
+                         ->with('success', 'Surat internal berhasil diajukan. Menunggu verifikasi BAU.');
+
+    } catch (\Exception $e) {
+        DB::rollBack();
+        return back()->with('error', 'Gagal mengajukan surat: ' . $e->getMessage());
     }
+}
+
+   
 
 
     // Fungsi Export Excel (Stream)
@@ -287,5 +263,78 @@ public function destroy($id)
 
     return redirect()->route('adminrektor.surat-keluar-internal.index')
                      ->with('success', 'Surat berhasil dihapus.');
+}
+
+public function getRiwayat($id)
+{
+    try {
+        $suratKeluar = SuratKeluar::with('penerimaInternal')->findOrFail($id);
+        $listRiwayat = [];
+
+        $parseDate = function($val) {
+            try { return $val ? Carbon::parse($val) : null; } catch (\Exception $e) { return null; }
+        };
+
+        // --- LOG 1: PENGAJUAN OLEH REKTOR ---
+        $tglInput = $parseDate($suratKeluar->created_at);
+        $listRiwayat[] = [
+            'status_aksi' => 'Surat Diajukan',
+            'catatan'     => 'Admin Rektor mengajukan surat internal. Menunggu verifikasi BAU.',
+            'created_at'  => $tglInput ? $tglInput->toISOString() : null,
+            'tanggal_f'   => $tglInput ? $tglInput->isoFormat('D MMMM Y, HH:mm') . ' WIB' : '-',
+            'user'        => ['name' => 'Admin Rektor'] 
+        ];
+
+        // --- LOG 2: VERIFIKASI & PENERUSAN OLEH BAU ---
+        // Log ini muncul jika status sudah 'proses' atau 'selesai'
+        if ($suratKeluar->status !== 'pending') {
+            $tglVerif = $parseDate($suratKeluar->updated_at); // Asumsi updated_at berubah saat BAU aksi
+            
+            $listRiwayat[] = [
+                'status_aksi' => $suratKeluar->status == 'selesai' ? 'Diteruskan ke Satker' : 'Sedang Diverifikasi',
+                'catatan'     => $suratKeluar->status == 'selesai' 
+                                 ? 'Admin BAU telah memverifikasi dan meneruskan surat ke Satker tujuan.' 
+                                 : 'Admin BAU sedang memverifikasi dokumen.',
+                'created_at'  => $tglVerif ? $tglVerif->toISOString() : null,
+                'tanggal_f'   => $tglVerif ? $tglVerif->isoFormat('D MMMM Y, HH:mm') . ' WIB' : '-',
+                'user'        => ['name' => 'Admin BAU']
+            ];
+        }
+
+        // --- LOG 3: AKTIVITAS DI SISI SATKER (DIBACA/ARSIP) ---
+        if ($suratKeluar->penerimaInternal->isNotEmpty()) {
+            foreach ($suratKeluar->penerimaInternal as $penerima) {
+                if (!$penerima->pivot) continue;
+                
+                $status = $penerima->pivot->is_read ?? 0;
+                $rawTime = $penerima->pivot->updated_at;
+                $waktu = $parseDate($rawTime);
+                
+                if ($status > 0) { // Hanya muncul jika sudah dibaca (1) atau diarsip (2)
+                    $listRiwayat[] = [
+                        'status_aksi' => $status == 2 ? 'Diterima & Diarsipkan' : 'Dibaca Satker',
+                        'catatan'     => ($status == 2 ? 'Selesai diarsip oleh ' : 'Surat telah dibaca oleh ') . $penerima->nama_satker,
+                        'created_at'  => $waktu ? $waktu->toISOString() : null,
+                        'tanggal_f'   => $waktu ? $waktu->isoFormat('D MMMM Y, HH:mm') . ' WIB' : '-',
+                        'user'        => ['name' => 'Admin ' . $penerima->nama_satker]
+                    ];
+                }
+            }
+        }
+
+        // Sorting agar urutan waktu benar (Tertua ke Terbaru)
+        usort($listRiwayat, function($a, $b) {
+            return strtotime($a['created_at']) <=> strtotime($b['created_at']);
+        });
+
+        return response()->json([
+            'status'      => 'success',
+            'nomor_surat' => $suratKeluar->nomor_surat,
+            'riwayats'    => $listRiwayat
+        ]);
+
+    } catch (\Throwable $e) {
+        return response()->json(['status' => 'error', 'message' => $e->getMessage()], 500);
+    }
 }
 }

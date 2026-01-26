@@ -63,130 +63,158 @@
                             <th class="text-center" width="5%">No</th>
                             <th width="20%">Asal Surat</th>
                             <th width="25%">Perihal</th>
-                            <th width="20%">Tujuan</th>
+                            <th width="10%">Tujuan</th>
                             <th width="15%">Status</th>
                             <th class="text-center" width="15%">Aksi</th>
                         </tr>
                     </thead>
-                    <tbody>
-                        @foreach ($semuaSurat as $surat)
-                        
-                        @php
-                            // --- LOGIKA TUJUAN (SAMA SEPERTI SEBELUMNYA) ---
-                            $tipe = $surat->tujuan_tipe;
-                            $detailTujuan = '-';
-                            
-                            if (empty($tipe)) {
-                                if ($surat->tujuan_satker_id) { $tipe = 'satker'; }
-                                elseif ($surat->tujuan_user_id) { $tipe = 'pegawai'; }
-                                else { $tipe = 'universitas'; }
-                            }
+ <tbody>
+    {{-- 1. INISIALISASI NOMOR URUT MANUAL --}}
+    @php $nomor = 1; @endphp
 
-                            if ($tipe == 'satker') {
-                                $detailTujuan = $surat->tujuanSatker->nama_satker ?? 'Satker Tidak Ditemukan';
-                            } elseif ($tipe == 'pegawai') {
-                                $detailTujuan = $surat->tujuanUser->name ?? 'Pegawai Tidak Ditemukan';
-                            }
+    @foreach ($semuaSurat as $surat)
 
-                            $htmlTujuan = '';
-                            $modalTujuan = '';
+    @php
+        // 2. BERSIHKAN STRING ASAL SURAT
+        $asal = strtoupper(trim($surat->surat_dari));
 
-                            if ($tipe == 'rektor') {
-                                $htmlTujuan = '<span class="badge bg-primary">Rektor</span>';
-                                $modalTujuan = 'Rektor';
-                            } elseif ($tipe == 'universitas') {
-                                $htmlTujuan = '<span class="badge bg-info text-dark">Universitas</span>';
-                                $modalTujuan = 'Universitas';
-                            } elseif ($tipe == 'satker') {
-                                $htmlTujuan = '<span class="badge bg-success">Satker</span><div class="small text-muted mt-1">'.$detailTujuan.'</div>';
-                                $modalTujuan = 'Satker: ' . $detailTujuan;
-                            } elseif ($tipe == 'pegawai') {
-                                $htmlTujuan = '<span class="badge bg-secondary">Pegawai</span><div class="small text-muted mt-1">'.$detailTujuan.'</div>';
-                                $modalTujuan = 'Pegawai: ' . $detailTujuan;
-                            } elseif ($tipe == 'edaran_semua_satker') {
-                                $htmlTujuan = '<span class="badge bg-dark">Edaran (Semua)</span>';
-                                $modalTujuan = 'Surat Edaran (Semua Satker)';
-                            }
+        // 3. FILTER SEMBUNYIKAN SURAT DARI BAU
+        if (
+            $asal == 'BAU' || 
+            $asal == 'B A U' ||
+            $asal == 'ADMIN BAU' ||
+            str_contains($asal, 'BIRO ADMINISTRASI UMUM')
+        ) {
+            continue; // Skip data ini (Nomor $nomor TIDAK akan bertambah)
+        }
+    @endphp
 
-                            // --- LOGIKA STATUS ---
-                            $statusBadge = '';
-                            if ($surat->status == 'baru_di_bau') {
-                                $statusBadge = '<span class="badge bg-danger">Baru (Draft)</span>';
-                            } elseif ($surat->status == 'di_admin_rektor') {
-                                $statusBadge = '<span class="badge bg-warning text-dark">Di Admin Rektor</span>';
-                            } else {
-                                $statusBadge = '<span class="badge bg-secondary">'.$surat->status.'</span>';
-                            }
-                        @endphp
+    @php
+        // --- LOGIKA TUJUAN ---
+        $tipe = $surat->tujuan_tipe;
+        $detailTujuan = '-';
+        
+        if (empty($tipe)) {
+            if ($surat->tujuan_satker_id) { $tipe = 'satker'; }
+            elseif ($surat->tujuan_user_id) { $tipe = 'pegawai'; }
+            else { $tipe = 'universitas'; }
+        }
 
-                        <tr>
-                            <td class="text-center fw-bold">{{ $loop->iteration }}</td>
-                            <td>
-                                <span class="fw-bold text-dark">{{ $surat->surat_dari }}</span>
-                                <br>
-                                <small class="text-muted"><i class="bi bi-calendar-event me-1"></i>{{ $surat->diterima_tanggal ? $surat->diterima_tanggal->format('d M Y') : '-' }}</small>
-                            </td>
-                            <td>
-                                {{ Str::limit($surat->perihal, 50) }}
-                                <br>
-                                <small class="text-muted">No: {{ $surat->nomor_surat }}</small>
-                            </td>
-                            <td>{!! $htmlTujuan !!}</td>
-                            <td>{!! $statusBadge !!}</td>
-                            <td class="text-center">
-                                <div class="d-flex justify-content-center gap-1">
-                                    
-                                    {{-- LIHAT DETAIL --}}
-                                    <button type="button" class="btn btn-sm btn-info text-white btn-icon" 
-                                        title="Lihat Detail"
-                                        data-bs-toggle="modal" 
-                                        data-bs-target="#detailSuratModal"
-                                        data-no-agenda="{{ $surat->no_agenda }}"
-                                        data-perihal="{{ $surat->perihal }}"
-                                        data-asal-surat="{{ $surat->surat_dari }}"
-                                        data-tujuan-lengkap="{{ $modalTujuan }}"
-                                        data-tanggal-surat="{{ $surat->tanggal_surat->isoFormat('D MMMM YYYY') }}"
-                                        data-tanggal-diterima="{{ $surat->diterima_tanggal ? $surat->diterima_tanggal->isoFormat('D MMMM YYYY') : '-' }}"
-                                        data-file-url="{{ Storage::url($surat->file_surat) }}">
-                                        <i class="bi bi-eye-fill"></i>
-                                    </button>
+        if ($tipe == 'satker') {
+            $detailTujuan = $surat->tujuanSatker->nama_satker ?? 'Satker Tidak Ditemukan';
+        } elseif ($tipe == 'pegawai') {
+            $detailTujuan = $surat->tujuanUser->name ?? 'Pegawai Tidak Ditemukan';
+        }
 
-                                    {{-- EDIT & HAPUS --}}
-                                    <a href="{{ route('bau.surat.edit', $surat->id) }}" class="btn btn-sm btn-warning text-white btn-icon" title="Edit">
-                                        <i class="bi bi-pencil-fill"></i>
-                                    </a>
+        $htmlTujuan = '';
+        $modalTujuan = '';
 
-                                    <form action="{{ route('bau.surat.destroy', $surat->id) }}" method="POST" class="d-inline" onsubmit="return confirm('Yakin ingin menghapus surat ini?');">
-                                        @csrf @method('DELETE')
-                                        <button type="submit" class="btn btn-sm btn-danger btn-icon" title="Hapus">
-                                            <i class="bi bi-trash-fill"></i>
-                                        </button>
-                                    </form>
+        if ($tipe == 'rektor') {
+            $htmlTujuan = '<span class="badge bg-primary">Rektor</span>';
+            $modalTujuan = 'Rektor';
+        } elseif ($tipe == 'universitas') {
+            $htmlTujuan = '<span class="badge bg-info text-dark">Universitas</span>';
+            $modalTujuan = 'Universitas';
+        } elseif ($tipe == 'satker') {
+            $htmlTujuan = '<span class="badge bg-success">Satker</span><div class="small text-muted mt-1">'.$detailTujuan.'</div>';
+            $modalTujuan = 'Satker: ' . $detailTujuan;
+        } elseif ($tipe == 'pegawai') {
+            $htmlTujuan = '<span class="badge bg-secondary">Pegawai</span><div class="small text-muted mt-1">'.$detailTujuan.'</div>';
+            $modalTujuan = 'Pegawai: ' . $detailTujuan;
+        } elseif ($tipe == 'edaran_semua_satker') {
+            $htmlTujuan = '<span class="badge bg-dark">Edaran (Semua)</span>';
+            $modalTujuan = 'Surat Edaran (Semua Satker)';
+        }
 
-                                    {{-- TERUSKAN --}}
-                                    @if ($surat->status == 'baru_di_bau')
-                                        @if ($tipe == 'rektor' || $tipe == 'universitas')
-                                            <form action="{{ route('bau.surat.forwardToRektor', $surat->id) }}" method="POST" class="d-inline" onsubmit="return confirm('Teruskan surat ini ke Admin Rektor?');">
-                                                @csrf
-                                                <button type="submit" class="btn btn-sm btn-primary btn-icon" title="Teruskan ke Rektor">
-                                                    <i class="bi bi-send-fill"></i>
-                                                </button>
-                                            </form>
-                                        @else
-                                            <form action="{{ route('bau.surat.forwardToSatker', $surat->id) }}" method="POST" class="d-inline" onsubmit="return confirm('Kirim surat langsung ke penerima?');">
-                                                @csrf
-                                                <button type="submit" class="btn btn-sm btn-success btn-icon" title="Kirim Langsung">
-                                                    <i class="bi bi-send-check-fill"></i>
-                                                </button>
-                                            </form>
-                                        @endif
-                                    @endif
+        // --- LOGIKA STATUS ---
+        $statusBadge = '';
+        if ($surat->status == 'baru_di_bau') {
+            $statusBadge = '<span class="badge bg-danger">Baru (Draft)</span>';
+        } elseif ($surat->status == 'di_admin_rektor') {
+            $statusBadge = '<span class="badge bg-warning text-dark">Di Admin Rektor</span>';
+        } else {
+            $statusBersih = ucwords(str_replace('_', ' ', $surat->status));
+            $statusBadge = '<span class="badge bg-secondary">'.$statusBersih.'</span>';
+        }
+    @endphp
 
-                                </div>
-                            </td>
-                        </tr>
-                        @endforeach
-                    </tbody>
+    <tr>
+        {{-- GANTI $loop->iteration DENGAN $nomor++ --}}
+        <td class="text-center fw-bold">{{ $nomor++ }}</td>
+        
+        <td>
+            <span class="fw-bold text-dark">{{ $surat->surat_dari }}</span>
+            <br>
+            <small class="text-muted"><i class="bi bi-calendar-event me-1"></i>{{ $surat->diterima_tanggal ? $surat->diterima_tanggal->format('d M Y') : '-' }}</small>
+        </td>
+        <td>
+            {{ Str::limit($surat->perihal, 50) }}
+            <br>
+            <small class="text-muted">No: {{ $surat->nomor_surat }}</small>
+        </td>
+        <td>{!! $htmlTujuan !!}</td>
+        <td>{!! $statusBadge !!}</td>
+        <td class="text-center">
+            <div class="d-flex justify-content-center gap-1">
+                
+                {{-- LIHAT DETAIL --}}
+                <button type="button" class="btn btn-sm btn-info text-white btn-icon" 
+                    title="Lihat Detail"
+                    data-bs-toggle="modal" 
+                    data-bs-target="#detailSuratModal"
+                    data-no-agenda="{{ $surat->no_agenda }}"
+                    data-perihal="{{ $surat->perihal }}"
+                    data-asal-surat="{{ $surat->surat_dari }}"
+                    data-tujuan-lengkap="{{ $modalTujuan }}"
+                    data-tanggal-surat="{{ $surat->tanggal_surat->isoFormat('D MMMM YYYY') }}"
+                    data-tanggal-diterima="{{ $surat->diterima_tanggal ? $surat->diterima_tanggal->isoFormat('D MMMM YYYY') : '-' }}"
+                    data-file-url="{{ Storage::url($surat->file_surat) }}">
+                    <i class="bi bi-eye-fill"></i>
+                </button>
+
+                {{-- HANYA TAMPILKAN TOMBOL EDIT/HAPUS/TERUSKAN JIKA MASIH BARU --}}
+                @if ($surat->status == 'baru_di_bau')
+                    
+                    {{-- EDIT --}}
+                    <a href="{{ route('bau.surat.edit', $surat->id) }}" class="btn btn-sm btn-warning text-white btn-icon" title="Edit">
+                        <i class="bi bi-pencil-fill"></i>
+                    </a>
+
+                    {{-- HAPUS --}}
+                    <form action="{{ route('bau.surat.destroy', $surat->id) }}" method="POST" class="d-inline" onsubmit="return confirm('Yakin ingin menghapus surat ini?');">
+                        @csrf @method('DELETE')
+                        <button type="submit" class="btn btn-sm btn-danger btn-icon" title="Hapus">
+                            <i class="bi bi-trash-fill"></i>
+                        </button>
+                    </form>
+
+                    {{-- TERUSKAN --}}
+                    @if ($tipe == 'rektor' || $tipe == 'universitas')
+                        <form action="{{ route('bau.surat.forwardToRektor', $surat->id) }}" method="POST" class="d-inline" onsubmit="return confirm('Teruskan surat ini ke Admin Rektor?');">
+                            @csrf
+                            <button type="submit" class="btn btn-sm btn-primary btn-icon" title="Teruskan ke Rektor">
+                                <i class="bi bi-send-fill"></i>
+                            </button>
+                        </form>
+                    @else
+                        <form action="{{ route('bau.surat.forwardToSatker', $surat->id) }}" method="POST" class="d-inline" onsubmit="return confirm('Kirim surat langsung ke penerima?');">
+                            @csrf
+                            <button type="submit" class="btn btn-sm btn-success btn-icon" title="Kirim Langsung">
+                                <i class="bi bi-send-check-fill"></i>
+                            </button>
+                        </form>
+                    @endif
+
+                @else
+                    {{-- STATUS TERKUNCI --}}
+                    <span class="text-muted small fst-italic ms-1" title="Surat sedang diproses"><i class="bi bi-lock-fill"></i> Terkunci</span>
+                @endif
+
+            </div>
+        </td>
+    </tr>
+    @endforeach
+</tbody>
                 </table>
             </div>
         </div>

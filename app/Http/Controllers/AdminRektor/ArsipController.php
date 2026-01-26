@@ -27,7 +27,7 @@ class ArsipController extends Controller
     {
         // 1. Query Dasar
         $query = Surat::whereIn('tujuan_tipe', ['rektor', 'universitas'])
-            ->whereIn('status', ['selesai', 'disimpan']);
+            ->whereIn('status', ['arsip rektor', 'disimpan']);
 
         // 2. Filter Tanggal Surat
         if ($request->filled('start_date') && $request->filled('end_date')) {
@@ -84,7 +84,7 @@ class ArsipController extends Controller
                 // Copy Query Dasar dari Index agar hasil sama
                 $query = Surat::query()
                     ->whereIn('tujuan_tipe', ['rektor', 'universitas'])
-                    ->whereIn('status', ['selesai', 'disimpan']);
+                    ->whereIn('status', ['arsip rektor', 'disimpan']);
 
                 // Filter Tanggal
                 if ($this->startDate && $this->endDate) {

@@ -349,49 +349,103 @@
             
             detailSuratModal.querySelector('#modal-file-preview-wrapper').innerHTML = html;
         });
-
-        // Riwayat Modal
+    });
+</script>
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
         var riwayatModal = document.getElementById('riwayatModal');
-        riwayatModal.addEventListener('show.bs.modal', function (event) {
-            var button = event.relatedTarget;
-            var dataUrl = button.getAttribute('data-url');
-            var modalBody = riwayatModal.querySelector('#riwayatModalBody');
-            var modalLabel = riwayatModal.querySelector('#riwayatModalLabel');
+        
+        if (riwayatModal) {
+            riwayatModal.addEventListener('show.bs.modal', function (event) {
+                var button = event.relatedTarget;
+                if (!button) return;
 
-            modalBody.innerHTML = '<div class="text-center p-4"><div class="spinner-border text-primary" role="status"></div><p class="mt-2">Memuat...</p></div>';
-            
-            fetch(dataUrl)
-                .then(response => response.json())
-                .then(surat => {
-                    modalLabel.textContent = 'Riwayat Surat: ' + surat.perihal;
-                    var html = '<ul class="timeline">';
-                    surat.riwayats.forEach((item) => {
-                        var badge = 'primary'; var icon = 'bi-check';
-                        if (item.status_aksi.includes('Selesai')) badge = 'success';
-                        else if (item.status_aksi.includes('Diteruskan')) badge = 'warning';
-                        else if (item.status_aksi.includes('Disposisi')) badge = 'warning';
+                var dataUrl = button.getAttribute('data-url');
+                var modalBody = riwayatModal.querySelector('#riwayatModalBody');
+                var modalLabel = riwayatModal.querySelector('#riwayatModalLabel');
+
+                // 1. Tampilkan Loading
+                modalBody.innerHTML = `
+                    <div class="text-center p-4">
+                        <div class="spinner-border text-primary" role="status"></div>
+                        <p class="mt-2 text-muted">Sedang mengambil data...</p>
+                    </div>`;
+                
+                // 2. Fetch Data
+                fetch(dataUrl)
+                    .then(async response => {
+                        const isJson = response.headers.get('content-type')?.includes('application/json');
+                        const data = isJson ? await response.json() : null; // Coba baca JSON
+
+                        // JIKA GAGAL (Bukan JSON atau status error)
+                        if (!response.ok || !data) {
+                            // Baca text aslinya (kemungkinan HTML Error Laravel)
+                            const errorText = await response.text(); 
+                            console.error("RAW SERVER RESPONSE:", errorText); // <--- CEK CONSOLE BROWSER DISINI
+                            throw new Error(data?.message || "Server Error (Cek Console)");
+                        }
                         
-                        if (item.status_aksi.includes('Input')) icon = 'bi-pencil-fill';
-                        else if (item.status_aksi.includes('Rektor')) icon = 'bi-person-workspace';
+                        return data;
+                    })
+                    .then(data => {
+                        // CEK JIKA CONTROLLER MENGIRIM PESAN ERROR
+                        if (data.status === 'error') {
+                            throw new Error(data.message);
+                        }
 
-                        html += `<li>
-                                    <div class="timeline-badge ${badge}"><i class="bi ${icon}"></i></div>
-                                    <div class="timeline-panel">
-                                        <div class="timeline-heading">
-                                            <h6 class="timeline-title">${item.status_aksi}</h6>
-                                            <p><small class="text-muted"><i class="bi bi-clock-fill"></i> ${formatTanggal(item.created_at)}<br>${item.user.name}</small></p>
+                        // 3. Render Data Sukses
+                        modalLabel.textContent = 'Riwayat Surat: ' + (data.perihal || '-');
+                        var html = '<ul class="timeline">';
+                        
+                        if (data.riwayats && data.riwayats.length > 0) {
+                            data.riwayats.forEach((item) => {
+                                var badge = 'primary'; 
+                                var icon = 'bi-check';
+                                var status = item.status_aksi || '';
+
+                                if (status.includes('Selesai') || status.includes('Arsip')) {
+                                    badge = 'success'; icon = 'bi-archive-fill';
+                                } else if (status.includes('Diteruskan') || status.includes('Disposisi')) {
+                                    badge = 'warning'; icon = 'bi-arrow-right';
+                                } else if (status.includes('Masuk') || status.includes('Input')) {
+                                    badge = 'info'; icon = 'bi-pencil-fill';
+                                }
+
+                                html += `
+                                    <li>
+                                        <div class="timeline-badge ${badge}"><i class="bi ${icon}"></i></div>
+                                        <div class="timeline-panel">
+                                            <div class="timeline-heading">
+                                                <h6 class="timeline-title fw-bold">${status}</h6>
+                                                <p class="mb-0">
+                                                    <small class="text-muted">
+                                                        <i class="bi bi-clock"></i> ${item.tanggal_f} 
+                                                        <br>Oleh: <strong>${item.user_name}</strong>
+                                                    </small>
+                                                </p>
+                                            </div>
+                                            <div class="timeline-body mt-2">
+                                                <p class="mb-0 text-dark">${item.catatan || '-'}</p>
+                                            </div>
                                         </div>
-                                        <div class="timeline-body"><p>${item.catatan}</p></div>
-                                    </div>
-                                </li>`;
+                                    </li>`;
+                            });
+                        } else {
+                            html += '<li class="text-center p-3 text-muted">Belum ada riwayat.</li>';
+                        }
+                        html += '</ul>';
+                        modalBody.innerHTML = html;
+                    })
+                    .catch(err => {
+                        console.error("Javascript Catch:", err);
+                        modalBody.innerHTML = `
+                            <div class="alert alert-danger text-center">
+                                <strong>Gagal Memuat Data!</strong><br>
+                                <small>${err.message}</small>
+                            </div>`;
                     });
-                    html += '</ul>';
-                    modalBody.innerHTML = html;
-                })
-                .catch(err => {
-                    modalBody.innerHTML = '<p class="text-danger text-center">Gagal memuat data.</p>';
-                });
-        });
+            });
+        }
     });
 </script>
 @endpush

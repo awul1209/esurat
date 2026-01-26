@@ -14,6 +14,9 @@ class RiwayatSurat extends Model
         'user_id',
         'status_aksi',
         'catatan',
+        'surat_keluar_id',
+        'penerima_id',
+        'is_read',
     ];
 
     /**
@@ -37,4 +40,13 @@ class RiwayatSurat extends Model
     {
         return $this->belongsTo(Surat::class);
     }
+    public function suratKeluar()
+{
+    return $this->belongsTo(SuratKeluar::class, 'surat_keluar_id');
+}
+
+public function penerima()
+{
+    return $this->belongsTo(\App\Models\User::class, 'penerima_id');
+}
 }

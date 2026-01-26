@@ -41,6 +41,8 @@ class DisposisiController extends Controller
         ));
     }
 
+
+    // disposisi rektor dan arsip
  public function store(Request $request, Surat $surat)
 {
     // 1. Validasi Input
@@ -55,7 +57,6 @@ class DisposisiController extends Controller
     $user = Auth::user();
     $catatanRektor = $request->catatan_rektor;
     $disposisiLain = $request->disposisi_lain;
-    
     $klasifikasiId = $request->klasifikasi_ids[0] ?? null;
 
     // 2. Simpan Klasifikasi
@@ -67,46 +68,45 @@ class DisposisiController extends Controller
         return $value !== 'lainnya';
     });
 
+    // Ambil semua ID Admin BAU untuk notifikasi
+    $bauUserIds = \App\Models\User::where('role', 'bau')->pluck('id')->toArray();
+    $link = route('login');
+
     // ========================================================================
-    // KASUS A: ADA TUJUAN DISPOSISI (Diteruskan ke Satker/Lainnya)
+    // KASUS A: ADA TUJUAN DISPOSISI
     // ========================================================================
     if (!empty($cleanSatkerIds) || !empty($disposisiLain)) {
         
         $tujuanNames = [];
 
-        // 1. Simpan Tujuan Satker
         foreach ($cleanSatkerIds as $satkerId) {
             Disposisi::create([
-                'surat_id'         => $surat->id,
-                'tujuan_satker_id' => $satkerId,
-                'user_id'          => $user->id,
-                'klasifikasi_id'   => $klasifikasiId,
-                'catatan_rektor'   => $catatanRektor,
-                'tanggal_disposisi'=> now(),
+                'surat_id'          => $surat->id,
+                'tujuan_satker_id'  => $satkerId,
+                'user_id'           => $user->id,
+                'klasifikasi_id'    => $klasifikasiId,
+                'catatan_rektor'    => $catatanRektor,
+                'tanggal_disposisi' => now(),
             ]);
             
             $s = Satker::find($satkerId);
             if ($s) $tujuanNames[] = $s->nama_satker;
         }
 
-        // 2. Simpan Tujuan Lain
         if (!empty($disposisiLain)) {
             Disposisi::create([
-                'surat_id'         => $surat->id,
-                'disposisi_lain'   => $disposisiLain,
-                'user_id'          => $user->id,
-                'klasifikasi_id'   => $klasifikasiId,
-                'catatan_rektor'   => $catatanRektor,
-                'tujuan_satker_id' => null,
-                'tanggal_disposisi'=> now(),
+                'surat_id'          => $surat->id,
+                'disposisi_lain'    => $disposisiLain,
+                'user_id'           => $user->id,
+                'klasifikasi_id'    => $klasifikasiId,
+                'catatan_rektor'    => $catatanRektor,
+                'tujuan_satker_id'  => null,
+                'tanggal_disposisi' => now(),
             ]);
             $tujuanNames[] = $disposisiLain . ' (Eksternal)';
         }
 
-        // 3. Update Status
         $surat->update(['status' => 'didisposisi']);
-
-        // 4. Catat Riwayat
         $tujuanStr = implode(', ', $tujuanNames);
         
         RiwayatSurat::create([
@@ -116,59 +116,30 @@ class DisposisiController extends Controller
             'catatan'     => 'Rektor mendisposisikan surat ke: ' . $tujuanStr . '. (Menunggu BAU meneruskan).'
         ]);
 
-        // 5. NOTIFIKASI WA (KE BAU - INFO DISPOSISI)
-        try {
-            $adminBaus = User::where('role', 'bau')->get();
-            $nomorHpList = [];
-
-            foreach ($adminBaus as $admin) {
-                if ($admin->no_hp) {
-                    $pecahan = explode(',', $admin->no_hp);
-                    foreach($pecahan as $hp) $nomorHpList[] = trim($hp);
-                }
-            }
-
-            $link = route('login'); 
-            
-            foreach ($nomorHpList as $hpTarget) {
-                if(empty($hpTarget)) continue;
-
-                $pesan = 
-"📩 *Notifikasi Surat Telah Didisposisi*
-
-Yth. Admin BAU,
-Rektor telah melakukan disposisi pada surat berikut:
-
-Asal Surat       : {$surat->surat_dari}
-No. Agenda       : {$surat->no_agenda}
-Perihal          : {$surat->perihal}
-Tujuan Disposisi : {$tujuanStr}
-
-Mohon segera LOGIN dan TERUSKAN surat fisik/digital ke Satker terkait.
-Link: {$link}
-
-Pesan otomatis Sistem e-Surat.";
-
-                WaService::send($hpTarget, $pesan);
-            }
-        } catch (\Exception $e) {}
-
-       if ($surat->tipe_surat == 'internal') {
-            // Jika surat internal, arahkan ke route khusus internal
-            return redirect()->route('adminrektor.suratmasuk.internal')
-                ->with('success', 'Surat Internal telah didisposisi dan masuk Arsip.');
-        } else {
-            // Jika bukan internal (berarti eksternal), arahkan ke route index/eksternal
-            return redirect()->route('adminrektor.suratmasuk.index')
-                ->with('success', 'Surat Eksternal telah didisposisi dan masuk Arsip.');
+        // NOTIFIKASI EMAIL KE BAU (INFO DISPOSISI)
+        if (!empty($bauUserIds)) {
+            $details = [
+                'subject'    => '🔴 DISPOSISI REKTOR: ' . $surat->perihal,
+                'greeting'   => 'Yth. Admin BAU,',
+                'body'       => "Rektor telah memberikan DISPOSISI pada surat berikut:\n\n" .
+                                "Asal Surat: {$surat->surat_dari}\n" .
+                                "No. Agenda: {$surat->no_agenda}\n" .
+                                "Tujuan Disposisi: {$tujuanStr}\n" .
+                                "Catatan Rektor: " . ($catatanRektor ?? '-') . "\n\n" .
+                                "Mohon segera login dan teruskan surat tersebut ke Satker terkait.",
+                'actiontext' => 'Lihat Disposisi',
+                'actionurl'  => $link,
+                'file_url'   => asset('storage/' . $surat->file_surat)
+            ];
+            \App\Helpers\EmailHelper::kirimNotif($bauUserIds, $details);
         }
-    }
 
+    } 
     // ========================================================================
     // KASUS B: TIDAK ADA TUJUAN (LANGSUNG SELESAI/ARSIP)
     // ========================================================================
     else {
-        $surat->update(['status' => 'selesai']);
+        $surat->update(['status' => 'arsip rektor']);
 
         RiwayatSurat::create([
             'surat_id'    => $surat->id,
@@ -177,62 +148,37 @@ Pesan otomatis Sistem e-Surat.";
             'catatan'     => 'Surat disetujui/dibaca oleh Rektor. Langsung diarsipkan (Tanpa Disposisi).'
         ]);
 
-        // ===============================================================
-        // NOTIFIKASI WA (BARU: KE BAU - INFO ARSIP/SELESAI)
-        // ===============================================================
-        try {
-            // A. Ambil semua Admin BAU
-            $adminBaus = User::where('role', 'bau')->get();
-            $nomorHpList = [];
-
-            // B. Kumpulkan & Pecah Nomor HP
-            foreach ($adminBaus as $admin) {
-                if ($admin->no_hp) {
-                    $pecahan = explode(',', $admin->no_hp);
-                    foreach($pecahan as $hp) $nomorHpList[] = trim($hp);
-                }
-            }
-
-            // C. Kirim Pesan (Konten berbeda: Memberitahu Arsip)
-            $link = route('login'); 
-            
-            foreach ($nomorHpList as $hpTarget) {
-                if(empty($hpTarget)) continue;
-
-                $pesan = 
-"📂 *Notifikasi Surat Diarsipkan (Selesai)*
-
-Yth. Admin BAU,
-Rektor telah meninjau surat berikut dan memutuskan untuk **DIARSIPKAN (SELESAI)**:
-
-Asal Surat : {$surat->surat_dari}
-No. Agenda : {$surat->no_agenda}
-Perihal    : {$surat->perihal}
-
-Surat ini **TIDAK PERLU** diteruskan/didisposisikan ke unit lain.
-Status sistem: Selesai.
-
-Link: {$link}
-Pesan otomatis Sistem e-Surat.";
-
-                WaService::send($hpTarget, $pesan);
-            }
-
-        } catch (\Exception $e) {}
-        // ===============================================================
-
-        if ($surat->tipe_surat == 'Internal') {
-            // Jika surat internal, arahkan ke route khusus internal
-            return redirect()->route('adminrektor.suratmasuk.internal')
-                ->with('success', 'Surat Internal telah didisposisi dan masuk Arsip.');
-        } else {
-            // Jika bukan internal (berarti eksternal), arahkan ke route index/eksternal
-            return redirect()->route('adminrektor.suratmasuk.index')
-                ->with('success', 'Surat Eksternal telah didisposisi dan masuk Arsip.');
+        // NOTIFIKASI EMAIL KE BAU (INFO ARSIP/SELESAI)
+        if (!empty($bauUserIds)) {
+            $details = [
+                'subject'    => '🟢 SURAT SELESAI/ARSIP: ' . $surat->perihal,
+                'greeting'   => 'Yth. Admin BAU,',
+                'body'       => "Rektor telah meninjau surat berikut dan memutuskan untuk DIARSIPKAN (SELESAI):\n\n" .
+                                "Asal Surat: {$surat->surat_dari}\n" .
+                                "No. Agenda: {$surat->no_agenda}\n" .
+                                "Perihal: {$surat->perihal}\n\n" .
+                                "Surat ini TIDAK PERLU diteruskan ke unit lain. Status sistem otomatis diset menjadi Selesai.",
+                'actiontext' => 'Lihat Arsip Surat',
+                'actionurl'  => $link
+            ];
+            \App\Helpers\EmailHelper::kirimNotif($bauUserIds, $details);
         }
     }
+
+    // Redirect Berdasarkan Tipe Surat
+    $redirectMsg = ($surat->tipe_surat == 'internal') 
+        ? 'Surat Internal telah diproses.' 
+        : 'Surat Eksternal telah diproses.';
+    
+    $routeName = ($surat->tipe_surat == 'internal') 
+        ? 'adminrektor.suratmasuk.internal' 
+        : 'adminrektor.suratmasuk.index';
+
+    return redirect()->route($routeName)->with('success', $redirectMsg);
 }
 
+
+// RIWAYAT DISPOSISI
    public function riwayat(Request $request)
     {
         // Query Dasar
@@ -248,6 +194,7 @@ Pesan otomatis Sistem e-Surat.";
                 'arsip_satker',     // Sudah diselesaikan oleh satker
                 'selesai_edaran',    // Edaran yang sudah disebar
                 'diarsipkan',    // Edaran yang sudah disebar
+                'selesai'
             ]);
 
         // --- FILTER TANGGAL ---
@@ -293,7 +240,8 @@ Pesan otomatis Sistem e-Surat.";
                     'di_satker',        // Sampai di satker
                     'arsip_satker',     // Selesai di satker
                     'diarsipkan',     // BEM / ORMAWA / Lainnya
-                    'selesai_edaran'    // Edaran selesai
+                    'selesai_edaran',    // Edaran selesai
+                    'selesai'
                 ]);
                 // Status 'selesai', 'diarsipkan', 'disimpan' SUDAH DIHAPUS (Masuk Arsip Rektor)
 
@@ -381,13 +329,46 @@ Pesan otomatis Sistem e-Surat.";
     return Excel::download($export, 'Riwayat_Disposisi_Rektor_' . date('d-m-Y_H-i') . '.xlsx');
 }
 
-public function showRiwayatDetail(Surat $surat)
-    {
-        // Load relasi riwayats (urutkan terbaru) dan user pelakunya
-        $surat->load(['riwayats' => function($query) {
-            $query->latest(); 
-        }, 'riwayats.user']);
+ /**
+     * Perhatikan: Nama function diganti jadi 'detail' 
+     * agar sesuai dengan pesan error Laravel.
+     */
 
-        return response()->json($surat);
+//  LOG RIWAYAT DISPOSISI
+  public function detail($id)
+{
+    try {
+        $surat = \App\Models\Surat::findOrFail($id);
+
+        // Ambil riwayat hanya dari Admin Pusat (BAU & Rektor)
+        // Ini otomatis menghilangkan riwayat 'Informasi Umum' atau 'Delegasi' dari Satker
+        $riwayats = $surat->riwayats()
+            ->whereHas('user', function($q) {
+                $q->whereIn('role', ['admin', 'bau', 'admin_rektor']);
+            })
+            ->latest()
+            ->get();
+
+        $formattedData = $riwayats->map(function($item) {
+            return [
+                'status_aksi' => $item->status_aksi, 
+                'catatan'     => $item->catatan,
+                'tanggal_f'   => \Carbon\Carbon::parse($item->created_at)->isoFormat('D MMMM Y, HH.mm') . ' WIB',
+                'user_name'   => $item->user ? $item->user->name : 'Sistem'
+            ];
+        });
+
+        return response()->json([
+            'status'   => 'success',
+            'perihal'  => $surat->perihal,
+            'riwayats' => $formattedData
+        ]);
+
+    } catch (\Throwable $e) {
+        return response()->json([
+            'status'  => 'error',
+            'message' => $e->getMessage()
+        ], 500);
     }
+}
 }

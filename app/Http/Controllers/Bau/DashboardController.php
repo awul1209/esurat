@@ -21,110 +21,159 @@ class DashboardController extends Controller
         $user = Auth::user();
         $bauSatkerId = $user->satker_id;
 
-        // ====================================================================
-        // 1. DATA 4 KARTU KPI
-        // ====================================================================
+      // ====================================================================
+// 1. DATA 6 KARTU KPI (DIPERBARUI)
+// ====================================================================
 
-        // Card 1: Masuk (Untuk Rektor) - HARI INI
-        // Logika: Surat masuk (eksternal/internal) yang ditujukan ke Rektor/Univ, diterima HARI INI.
-        $untukRektorPending = Surat::whereIn('tujuan_tipe', ['rektor', 'universitas'])
-            ->whereDate('diterima_tanggal', $today)
-            ->count();
+// Card 1: Masuk (Untuk Rektor) - HARI INI
+$untukRektorPending = Surat::whereIn('tujuan_tipe', ['rektor', 'universitas'])
+    ->whereDate('diterima_tanggal', $today)
+    ->count();
 
-        // Card 2: Inbox BAU (Gabungan Eksternal & Internal)
-        // A. Eksternal
-        $inboxEksternal = Surat::where('tujuan_satker_id', $bauSatkerId)->count();
-        // B. Internal (Pakai SuratKeluar Relasi Pivot)
-        $inboxInternal = SuratKeluar::where('tipe_kirim', 'internal')
-            ->whereHas('penerimaInternal', function($q) use ($bauSatkerId) {
-                $q->where('satkers.id', $bauSatkerId);
-            })
-            ->count();
+// Card 2: Surat Keluar Rektor - HARI INI (BARU)
+$keluarRektorHariIni = SuratKeluar::whereHas('user', function($q) {
+        $q->where('role', 'admin_rektor');
+    })
+    ->whereDate('created_at', $today)
+    ->count();
 
-        $inboxBau = $inboxEksternal + $inboxInternal;
+// Card 3: Inbox BAU (Gabungan Eksternal & Internal) - HARI INI
+$inboxEksternal = Surat::where('tujuan_satker_id', $bauSatkerId)
+    ->whereDate('diterima_tanggal', $today)
+    ->count();
 
-        // Card 3: Sedang di Rektor (Menunggu Disposisi)
-        $sudahKeRektor = Surat::where('status', 'di_admin_rektor')->count();
+$inboxInternal = SuratKeluar::where('tipe_kirim', 'internal')
+    ->whereHas('penerimaInternal', function($q) use ($bauSatkerId) {
+        $q->where('satkers.id', $bauSatkerId);
+    })
+    ->whereDate('created_at', $today)
+    ->count();
 
-        // Card 4: Siap ke Satker (Hasil Disposisi yang balik ke BAU)
-        $siapKeSatker = Surat::where('status', 'didisposisi')->count();
+$inboxBau = $inboxEksternal + $inboxInternal;
+
+// Card 4: Surat Keluar BAU - HARI INI (BARU)
+$keluarBauHariIni = SuratKeluar::where('user_id', $user->id)
+    ->whereDate('created_at', $today)
+    ->count();
+
+// Card 5: Sedang di Rektor (Menunggu Disposisi)
+$sudahKeRektor = Surat::where('status', 'di_admin_rektor')->count();
+
+// Card 6: Siap ke Satker (Hasil Disposisi yang balik ke BAU)
+$siapKeSatker = Surat::where('status', 'didisposisi')->count();
+
+       // --- DATA BARIS KEDUA: PENDING TASK (4 CARD) ---
+
+// Card 1: Surat Masuk Rektor Perlu Ditangani (Status di_admin_rektor)
+// 1. Surat Masuk Rektor yang perlu ditangani (Antrean Verifikasi dari Satker lain)
+$rektorMasukPending = Surat::whereIn('tujuan_tipe', ['rektor', 'universitas'])
+    ->where('status', 'baru_di_bau')
+    ->where('user_id', '!=', $user->id) // Sesuai permintaan: Kecualikan surat yang dibuat oleh BAU sendiri
+    ->count();
+
+// Card 2: Surat Keluar Rektor Internal Perlu Ditangani (Misal status 'Draft' atau 'Proses')
+$rektorKeluarInternalPending = SuratKeluar::whereHas('user', function($q) {
+        $q->where('role', 'admin_rektor');
+    })
+    ->where('tipe_kirim', 'internal')
+    ->whereIn('status', ['Draft', 'Proses','pending']) // Sesuaikan dengan status di sistem Anda
+    ->count();
+
+// Card 3: Surat Keluar Rektor Eksternal Perlu Ditangani
+$rektorKeluarEksternalPending = SuratKeluar::whereHas('user', function($q) {
+        $q->where('role', 'admin_rektor');
+    })
+    ->where('tipe_kirim', 'eksternal')
+    ->whereIn('status', ['Draft', 'Proses','pending'])
+    ->count();
+
+// Card 4: Inbox BAU Perlu Ditangani (Status Baru/Belum Diarsipkan)
+$bauInboxPending = Surat::where('tujuan_satker_id', $bauSatkerId)
+    ->where('status', 'baru_di_bau')
+    ->count();
+
+
+
+
+      // ====================================================================
+// 2. DATA LINE CHART (TREN 7 HARI) - UPDATE: TAMBAH SURAT KELUAR
+// ====================================================================
+
+$lineLabels = [];
+$dataRektorMasuk = []; 
+$dataBauMasuk    = []; 
+$dataRektorKeluar = []; // Array baru
+$dataBauKeluar    = []; // Array baru
+
+for ($i = 6; $i >= 0; $i--) {
+    $date = Carbon::now()->subDays($i);
+    $formattedDate = $date->format('Y-m-d');
+    
+    $lineLabels[] = $date->isoFormat('D MMM'); 
+
+    // 1. Tren Rektor MASUK
+    $dataRektorMasuk[] = Surat::whereIn('tujuan_tipe', ['rektor', 'universitas'])
+        ->whereDate('diterima_tanggal', $formattedDate)
+        ->count();
+
+    // 2. Tren BAU MASUK (Eksternal + Internal Masuk)
+    $dailyInEksternal = Surat::where('tujuan_satker_id', $bauSatkerId)
+        ->whereDate('diterima_tanggal', $formattedDate)
+        ->count();
+    
+    $dailyInInternal = SuratKeluar::where('tipe_kirim', 'internal')
+        ->whereHas('penerimaInternal', function($q) use ($bauSatkerId) {
+            $q->where('satkers.id', $bauSatkerId);
+        })
+        ->whereDate('created_at', $formattedDate) 
+        ->count();
+    $dataBauMasuk[] = $dailyInEksternal + $dailyInInternal;
+
+    // 3. Tren Rektor KELUAR (BARU)
+    $dataRektorKeluar[] = SuratKeluar::whereHas('user', function($q) {
+            $q->where('role', 'admin_rektor');
+        })
+        ->whereDate('created_at', $formattedDate)
+        ->count();
+
+    // 4. Tren BAU KELUAR (BARU)
+    $dataBauKeluar[] = SuratKeluar::where('user_id', $user->id)
+        ->whereDate('created_at', $formattedDate)
+        ->count();
+}
 
 
        // ====================================================================
-        // 2. DATA LINE CHART (TREN 7 HARI) - PERBAIKAN DI SINI
-        // ====================================================================
-        
-        $lineLabels = [];
-        $dataRektor = []; 
-        $dataBau    = []; 
+// 3. DATA PIE CHART (KOMPOSISI SURAT BAU)
+// ====================================================================
 
-        for ($i = 6; $i >= 0; $i--) {
-            $date = Carbon::now()->subDays($i);
-            $formattedDate = $date->format('Y-m-d');
-            
-            $lineLabels[] = $date->isoFormat('D MMM'); 
+// 1. Surat Keluar Internal (Dibuat oleh BAU ke Satker lain)
+$bauKeluarInternal = SuratKeluar::where('user_id', $user->id)
+    ->where('tipe_kirim', 'internal')
+    ->count();
 
-            // Tren Rektor (Eksternal)
-            $countRektor = Surat::whereIn('tujuan_tipe', ['rektor', 'universitas'])
-                ->whereDate('diterima_tanggal', $formattedDate)
-                ->count();
-            $dataRektor[] = $countRektor;
+// 2. Surat Keluar Eksternal (Dibuat oleh BAU ke pihak Luar)
+$bauKeluarEksternal = SuratKeluar::where('user_id', $user->id)
+    ->where('tipe_kirim', 'eksternal')
+    ->count();
 
-            // Tren BAU (Eksternal + Internal)
-            // A. Eksternal (Berdasarkan diterima_tanggal)
-            $dailyEksternal = Surat::where('tujuan_satker_id', $bauSatkerId)
-                ->whereDate('diterima_tanggal', $formattedDate)
-                ->count();
-            
-            // B. Internal (PERBAIKAN: Gunakan created_at)
-            // Agar surat yang diinput hari ini (meski tanggal suratnya lampau) tetap muncul di grafik hari ini.
-            $dailyInternal = SuratKeluar::where('tipe_kirim', 'internal')
-                ->whereHas('penerimaInternal', function($q) use ($bauSatkerId) {
-                    $q->where('satkers.id', $bauSatkerId);
-                })
-                ->whereDate('created_at', $formattedDate) 
-                ->count();
+// 3. Surat Masuk Internal (Dari Satker lain ditujukan ke BAU)
+$bauMasukInternal = SuratKeluar::where('tipe_kirim', 'internal')
+    ->whereHas('penerimaInternal', function($q) use ($bauSatkerId) {
+        $q->where('satkers.id', $bauSatkerId);
+    })
+    ->count();
 
-            $dataBau[] = $dailyEksternal + $dailyInternal;
-        }
+// 4. Surat Masuk Eksternal (Dari pihak luar langsung ke BAU)
+$bauMasukEksternal = Surat::where('tujuan_satker_id', $bauSatkerId)
+    ->where(function($q) {
+        $q->where('tipe_surat', '!=', 'internal')
+          ->orWhereNull('tipe_surat');
+    })
+    ->count();
 
-
-        // ====================================================================
-        // 3. DATA BAR CHART (KOMPOSISI DETIL)
-        // ====================================================================
-        
-        // --- A. REKTOR (Ambil dari Logika Riwayat Terusan) ---
-        // Filter Status: SUDAH DITERUSKAN (didisposisi, di_satker, arsip_satker, dll)
-        $statusTerusan = ['didisposisi', 'di_satker', 'arsip_satker', 'diarsipkan', 'selesai_edaran'];
-        
-        $rektorInternal = Surat::whereIn('tujuan_tipe', ['rektor', 'universitas'])
-            ->whereIn('status', $statusTerusan)
-            ->where('tipe_surat', 'internal')
-            ->count();
-            
-        $rektorEksternal = Surat::whereIn('tujuan_tipe', ['rektor', 'universitas'])
-            ->whereIn('status', $statusTerusan)
-            ->where('tipe_surat', '!=', 'internal')
-            ->count();
-
-        // --- B. BAU (Ambil dari Logika Inbox BAU) ---
-        
-        // BAU Internal (Dari SuratKeluar Pivot)
-        $bauInternal = SuratKeluar::where('tipe_kirim', 'internal')
-            ->whereHas('penerimaInternal', function($q) use ($bauSatkerId) {
-                $q->where('satkers.id', $bauSatkerId);
-            })
-            ->count();
-
-        // BAU Eksternal (Dari Tabel Surat - Manual/Eksternal)
-        $bauEksternal = Surat::where('tujuan_satker_id', $bauSatkerId)
-            ->where(function($q) {
-                $q->where('tipe_surat', '!=', 'internal') // Pastikan bukan internal
-                  ->orWhereNull('tipe_surat');
-            })
-            ->count();
-
-        $komposisiData = [$rektorInternal, $rektorEksternal, $bauInternal, $bauEksternal];
+// Kirim ke variabel komposisiData
+$komposisiData = [$bauKeluarInternal, $bauKeluarEksternal, $bauMasukInternal, $bauMasukEksternal];
 
 
       // ====================================================================
@@ -217,15 +266,41 @@ class DashboardController extends Controller
             ];
         }
 
+
+ 
+
         // ====================================================================
         // 6. RETURN VIEW
         // ====================================================================
-        return view('bau.dashboard', compact(
-            'untukRektorPending', 'inboxBau', 'sudahKeRektor', 'siapKeSatker',
-            'lineLabels', 'dataRektor', 'dataBau',
-            'komposisiData',
-            'suratPending',
-            'calendarEvents'
-        ));
+// ====================================================================
+// 6. RETURN VIEW (PASTIKAN SEMUA VARIABEL MASUK & TIDAK ADA DUPLIKASI)
+// ====================================================================
+return view('bau.dashboard', compact(
+    // Baris 1: 6 Kartu KPI
+    'untukRektorPending', 
+    'keluarRektorHariIni', 
+    'inboxBau', 
+    'keluarBauHariIni', 
+    'sudahKeRektor', 
+    'siapKeSatker',
+
+    // Baris 2: 4 Kartu Pending Task (Tambahkan ini)
+    'rektorMasukPending', 
+    'rektorKeluarInternalPending', 
+    'rektorKeluarEksternalPending', 
+    'bauInboxPending',
+
+    // Data Chart (Line & Bar)
+    'lineLabels', 
+    'dataRektorMasuk', 
+    'dataRektorKeluar', 
+    'dataBauMasuk', 
+    'dataBauKeluar',
+    'komposisiData',
+
+    // Data Lainnya
+    'suratPending', 
+    'calendarEvents'
+));
     }
 }

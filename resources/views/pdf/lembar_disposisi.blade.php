@@ -25,7 +25,7 @@
             font-family: 'DejaVu Sans', sans-serif; 
             display: inline-block; width: 12px; height: 12px;
             border: 1px solid #000; text-align: center;
-            line-height: 11px; font-size: 11px; margin-right: 4px; vertical-align: middle;
+            line-height: 3px; font-size: 22px; margin-right: 4px; vertical-align: middle; 
         }
         
         .faculty-table { width: 100%; border: none; }

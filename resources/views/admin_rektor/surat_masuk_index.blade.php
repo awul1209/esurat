@@ -70,111 +70,100 @@
         </div>
         <div class="card-body">
             <div class="table-responsive">
-                <table id="tabelSuratMasukAdmin" class="table table-hover align-middle table-sm">
-                    <thead class="table-light">
-                        <tr>
-                            <th scope="col" class="text-center">No. Agenda</th>
-                            <th scope="col">Perihal</th>
-                            <th scope="col">Asal Surat</th>
-                            <th scope="col">Tujuan</th> 
-                            <th scope="col">Tanggal Diterima</th>
-                            {{-- Kolom Status DIHAPUS --}}
-                            <th scope="col" class="text-center">Aksi</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach ($semuaSurat as $surat)
-                        @php
-                            // --- 1. LOGIKA DETEKSI TIPE TUJUAN (FALLBACK) ---
-                            $tipe = $surat->tujuan_tipe;
-                            $detailTujuan = '-';
+              <table id="tabelSuratMasukAdmin" class="table table-hover align-middle table-sm">
+    <thead class="table-light">
+        <tr>
+            <th scope="col" class="text-center" width="5%">No</th> {{-- Ubah label jadi No (karena isinya 1,2,3..) --}}
+            <th scope="col" width="15%">No. Surat</th> {{-- KOLOM BARU --}}
+            <th scope="col" width="25%">Perihal</th>
+            <th scope="col" width="20%">Asal Surat</th>
+            <th scope="col" width="15%">Tujuan</th> 
+            <th scope="col" width="10%">Tanggal Diterima</th>
+            <th scope="col" class="text-center" width="10%">Aksi</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach ($semuaSurat as $surat)
+        @php
+            // --- LOGIKA TIPE & TUJUAN ---
+            $tipe = $surat->tujuan_tipe;
+            $detailTujuan = '-';
 
-                            if (empty($tipe)) {
-                                if ($surat->tujuan_satker_id) {
-                                    $tipe = 'satker';
-                                } elseif ($surat->tujuan_user_id) {
-                                    $tipe = 'pegawai';
-                                } else {
-                                    // PERBAIKAN: Default fallback diubah menjadi 'universitas'
-                                    $tipe = 'universitas';
-                                }
-                            }
+            if (empty($tipe)) {
+                if ($surat->tujuan_satker_id) { $tipe = 'satker'; }
+                elseif ($surat->tujuan_user_id) { $tipe = 'pegawai'; }
+                else { $tipe = 'universitas'; }
+            }
 
-                            // --- 2. AMBIL NAMA DETAIL TUJUAN ---
-                            if ($tipe == 'satker') {
-                                $detailTujuan = $surat->tujuanSatker->nama_satker ?? 'Satker Tidak Ditemukan';
-                            } elseif ($tipe == 'pegawai') {
-                                $detailTujuan = $surat->tujuanUser->name ?? 'Pegawai Tidak Ditemukan';
-                            }
+            if ($tipe == 'satker') {
+                $detailTujuan = $surat->tujuanSatker->nama_satker ?? 'Satker Tidak Ditemukan';
+            } elseif ($tipe == 'pegawai') {
+                $detailTujuan = $surat->tujuanUser->name ?? 'Pegawai Tidak Ditemukan';
+            }
 
-                            // --- 3. SIAPKAN HTML UNTUK TAMPILAN (TABEL & MODAL) ---
-                            $htmlTujuanTabel = '';
-                            $textTujuanModal = '';
+            $htmlTujuanTabel = '';
+            $textTujuanModal = '';
 
-                            if ($tipe == 'rektor') {
-                                $htmlTujuanTabel = '<span class="badge bg-primary">Rektor</span>';
-                                $textTujuanModal = 'Rektor';
-                            } 
-                            // --- TAMBAHAN: Logika untuk Universitas ---
-                            elseif ($tipe == 'universitas') {
-                                $htmlTujuanTabel = '<span class="badge bg-primary">Universitas</span>';
-                                $textTujuanModal = 'Universitas';
-                            }
-                            // ------------------------------------------
-                            elseif ($tipe == 'satker') {
-                                $htmlTujuanTabel = '<span class="badge bg-warning text-dark">Satker</span><br><small class="text-muted">'.$detailTujuan.'</small>';
-                                $textTujuanModal = 'Satker (' . $detailTujuan . ')';
-                            } elseif ($tipe == 'pegawai') {
-                                $htmlTujuanTabel = '<span class="badge bg-info text-dark">Pegawai</span><br><small class="text-muted">'.$detailTujuan.'</small>';
-                                $textTujuanModal = 'Pegawai (' . $detailTujuan . ')';
-                            } elseif ($tipe == 'edaran_semua_satker') {
-                                $htmlTujuanTabel = '<span class="badge bg-secondary">Semua Satker</span><br><small class="text-muted">Surat Edaran</small>';
-                                $textTujuanModal = 'Semua Satker (Surat Edaran)';
-                            } else {
-                                $htmlTujuanTabel = '<span class="badge bg-light text-dark border">'.ucfirst($tipe).'</span>';
-                                $textTujuanModal = ucfirst($tipe);
-                            }
-                        @endphp
+            if ($tipe == 'rektor') {
+                $htmlTujuanTabel = '<span class="badge bg-primary">Rektor</span>';
+                $textTujuanModal = 'Rektor';
+            } elseif ($tipe == 'universitas') {
+                $htmlTujuanTabel = '<span class="badge bg-primary">Universitas</span>';
+                $textTujuanModal = 'Universitas';
+            } elseif ($tipe == 'satker') {
+                $htmlTujuanTabel = '<span class="badge bg-warning text-dark">Satker</span><br><small class="text-muted">'.$detailTujuan.'</small>';
+                $textTujuanModal = 'Satker (' . $detailTujuan . ')';
+            } elseif ($tipe == 'pegawai') {
+                $htmlTujuanTabel = '<span class="badge bg-info text-dark">Pegawai</span><br><small class="text-muted">'.$detailTujuan.'</small>';
+                $textTujuanModal = 'Pegawai (' . $detailTujuan . ')';
+            } elseif ($tipe == 'edaran_semua_satker') {
+                $htmlTujuanTabel = '<span class="badge bg-secondary">Semua Satker</span><br><small class="text-muted">Surat Edaran</small>';
+                $textTujuanModal = 'Semua Satker (Surat Edaran)';
+            } else {
+                $htmlTujuanTabel = '<span class="badge bg-light text-dark border">'.ucfirst($tipe).'</span>';
+                $textTujuanModal = ucfirst($tipe);
+            }
+        @endphp
 
-                        <tr>
-                            <th scope="row" class="text-center">{{ $surat->no_agenda }}</th>
-                            <td>{{ $surat->perihal }}</td>
-                            <td>{{ $surat->surat_dari }}</td>
-                            
-                            {{-- TAMPILKAN TUJUAN SURAT --}}
-                            <td>{!! $htmlTujuanTabel !!}</td>
+        <tr>
+            {{-- KOLOM NO (Placeholder JS) --}}
+            <td class="text-center">{{ $loop->iteration }}</td>
 
-                            <td>{{ $surat->diterima_tanggal->isoFormat('D MMMM YYYY') }}</td>
-                            
-                            {{-- Kolom Status (Badges) DIHAPUS --}}
+            {{-- KOLOM NO. SURAT (BARU) --}}
+            <td class="fw-bold text-primary">{{ $surat->nomor_surat }}</td>
 
-                            <td class="text-center">
-                                <div class="d-flex justify-content-center gap-1">
-                                    {{-- Tombol "Lihat" (Modal) --}}
-                                    <button type="button" class="btn btn-sm btn-info" 
-                                        title="Lihat Detail"
-                                        data-bs-toggle="modal" 
-                                        data-bs-target="#detailSuratModal"
-                                        data-no-agenda="{{ $surat->no_agenda }}"
-                                        data-perihal="{{ $surat->perihal }}"
-                                        data-asal-surat="{{ $surat->surat_dari }}"
-                                        data-tujuan-lengkap="{{ $textTujuanModal }}" 
-                                        data-tanggal-surat="{{ $surat->tanggal_surat->isoFormat('D MMMM YYYY') }}"
-                                        data-tanggal-diterima="{{ $surat->diterima_tanggal->isoFormat('D MMMM YYYY') }}"
-                                        data-file-url="{{ Storage::url($surat->file_surat) }}">
-                                        <i class="bi bi-eye-fill"></i>
-                                    </button>
+            <td>{{ $surat->perihal }}</td>
+            <td>{{ $surat->surat_dari }}</td>
+            <td>{!! $htmlTujuanTabel !!}</td>
+            <td>{{ $surat->diterima_tanggal->isoFormat('D MMMM YYYY') }}</td>
+            
+            <td class="text-center">
+                <div class="d-flex justify-content-center gap-1">
+                    {{-- Tombol Lihat --}}
+                    <button type="button" class="btn btn-sm btn-info" 
+                        title="Lihat Detail"
+                        data-bs-toggle="modal" 
+                        data-bs-target="#detailSuratModal"
+                        data-no-agenda="{{ $surat->no_agenda }}"
+                        data-perihal="{{ $surat->perihal }}"
+                        data-asal-surat="{{ $surat->surat_dari }}"
+                        data-tujuan-lengkap="{{ $textTujuanModal }}" 
+                        data-tanggal-surat="{{ $surat->tanggal_surat->isoFormat('D MMMM YYYY') }}"
+                        data-tanggal-diterima="{{ $surat->diterima_tanggal->isoFormat('D MMMM YYYY') }}"
+                        data-file-url="{{ Storage::url($surat->file_surat) }}">
+                        <i class="bi bi-eye-fill"></i>
+                    </button>
 
-                                    {{-- Tombol "Tindak Lanjuti" (ke Halaman Disposisi) --}}
-                                    <a href="{{ route('adminrektor.disposisi.show', $surat->id) }}" class="btn btn-primary btn-sm">
-                                        <i class="bi bi-pencil-square"></i> Proses
-                                    </a>
-                                </div>
-                            </td>
-                        </tr>
-                        @endforeach
-                    </tbody>
-                </table>
+                    {{-- Tombol Proses --}}
+                    <a href="{{ route('adminrektor.disposisi.show', $surat->id) }}" class="btn btn-primary btn-sm">
+                        <i class="bi bi-pencil-square"></i> Proses
+                    </a>
+                </div>
+            </td>
+        </tr>
+        @endforeach
+    </tbody>
+</table>
             </div>
         </div>
     </div>
@@ -243,23 +232,38 @@
 <script>
     $(document).ready(function() {
         
-        // --- Inisialisasi DataTables ---
-        new DataTable('#tabelSuratMasukAdmin', {
-            pagingType: 'simple_numbers', 
-            order: [[ 4, 'desc' ]], // Urut berdasarkan tanggal diterima
-            language: {
-                search: "Cari:",
-                lengthMenu: "_MENU_", 
-                info: "Menampilkan _START_ sampai _END_ dari _TOTAL_ data",
-                infoEmpty: "Menampilkan 0 data",
-                infoFiltered: "(difilter dari _MAX_ total data)",
-                paginate: {
-                    next: ">",
-                    previous: "<"
-                },
-                zeroRecords: "Tidak ada data yang cocok ditemukan"
-            }
+       // 1. Simpan DataTable ke variabel 't'
+    var t = $('#tabelSuratMasukAdmin').DataTable({
+        pagingType: 'simple_numbers',
+        
+        // PENTING: Matikan sorting di kolom 'No' (index 0) dan 'Aksi' (terakhir)
+        columnDefs: [
+            { searchable: false, orderable: false, targets: 0 },
+            { orderable: false, targets: -1 }
+        ],
+
+        // PENTING: Kosongkan order agar urutan mengikuti Controller (Tanggal Surat terbaru)
+        order: [], 
+
+        language: {
+            search: "Cari:",
+            lengthMenu: "_MENU_", 
+            info: "Menampilkan _START_ sampai _END_ dari _TOTAL_ data",
+            infoEmpty: "Menampilkan 0 data",
+            infoFiltered: "(difilter dari _MAX_ total data)",
+            paginate: { next: ">", previous: "<" },
+            zeroRecords: "Tidak ada data yang cocok ditemukan"
+        }
+    });
+
+    // 2. LOGIKA AUTO NOMOR (1, 2, 3...)
+    // Script ini memaksa kolom pertama selalu urut meski disortir
+    t.on('order.dt search.dt', function () {
+        let i = 1;
+        t.column(0, {search: 'applied', order: 'applied'}).nodes().each(function (cell, k) {
+            cell.innerHTML = i++;
         });
+    }).draw();
 
         // --- Script untuk Modal Box ---
         var detailSuratModal = document.getElementById('detailSuratModal');
