@@ -88,9 +88,23 @@ $rektorKeluarEksternalPending = SuratKeluar::whereHas('user', function($q) {
     ->count();
 
 // Card 4: Inbox BAU Perlu Ditangani (Status Baru/Belum Diarsipkan)
-$bauInboxPending = Surat::where('tujuan_satker_id', $bauSatkerId)
-    ->where('status', 'baru_di_bau')
+// 1. Hitung Pending dari Tabel Surat (Manual/Eksternal)
+// Gunakan whereIn untuk mengecek banyak status sekaligus
+$pendingManual = \App\Models\Surat::where('tujuan_satker_id', $bauSatkerId)
+    ->whereIn('status', ['baru_di_bau', 'terkirim']) 
     ->count();
+
+// 2. Hitung Pending dari Tabel SuratKeluar (Kiriman Sistem/Internal)
+// Surat dianggap pending di BAU jika statusnya masih 'proses' atau 'terkirim' ke BAU
+$pendingSistem = \App\Models\SuratKeluar::where('tipe_kirim', 'internal')
+    ->whereHas('penerimaInternal', function($q) use ($bauSatkerId) {
+        $q->where('satker_id', $bauSatkerId);
+    })
+    ->whereIn('status', ['proses', 'terkirim']) // Sesuaikan dengan status di tabel surat_keluars Anda
+    ->count();
+
+// 3. Gabungkan Total Pending
+$bauInboxPending = $pendingManual + $pendingSistem;
 
 
 

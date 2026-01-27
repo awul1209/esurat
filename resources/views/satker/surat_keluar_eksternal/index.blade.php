@@ -1,5 +1,5 @@
 @extends('layouts.app')
-
+<!-- menambah kolom surat kirim -->
 @push('styles')
 <link href="https://cdn.datatables.net/v/bs5/dt-2.1.0/datatables.min.css" rel="stylesheet">
 <style>
@@ -102,6 +102,7 @@
                             <th width="25%">Tujuan Surat</th>
                             <th width="30%">No. Surat & Perihal</th>
                             <th width="15%">Tanggal Kirim</th>
+                            <th width="15%">Tanggal Surat</th>
                             <th class="text-center" width="10%">File</th>
                             <th class="text-center" width="15%">Aksi</th>
                         </tr>
@@ -131,6 +132,12 @@
                             </td>
 
                             {{-- TANGGAL --}}
+                            <td>
+                                <div class="d-flex align-items-center text-muted">
+                                    <i class="bi bi-calendar3 me-2"></i>
+                                    {{ \Carbon\Carbon::parse($surat->created_at)->format('d/m/Y') }}
+                                </div>
+                            </td>
                             <td>
                                 <div class="d-flex align-items-center text-muted">
                                     <i class="bi bi-calendar3 me-2"></i>

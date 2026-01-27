@@ -1,5 +1,5 @@
 @extends('layouts.app')
-
+<!-- MENAMPILKAN HAPUS BTN -->
 @push('styles')
 {{-- DataTables Bootstrap 5 CSS --}}
 <link href="https://cdn.datatables.net/v/bs5/dt-2.1.0/datatables.min.css" rel="stylesheet">
@@ -155,23 +155,29 @@
                     data-url="{{ route('adminrektor.surat-keluar-eksternal.log', $surat->id) }}">
                     <i class="bi bi-clock-history"></i>
                 </button>
+                                  <form action="{{ route('adminrektor.surat-keluar-eksternal.destroy', $surat->id) }}" method="POST" class="d-inline">
+                        @csrf @method('DELETE')
+                        <button type="submit" class="btn btn-danger btn-sm shadow-sm" title="Hapus" onclick="return confirm('Hapus permohonan surat ini?')">
+                            <i class="bi bi-trash-fill"></i>
+                        </button>
+                    </form>
 
                 {{-- Logika Tombol Edit/Hapus: Hanya muncul jika status masih PENDING --}}
                 @if($surat->status == 'pending')
                     <a href="{{ route('adminrektor.surat-keluar-eksternal.edit', $surat->id) }}" class="btn btn-warning btn-sm text-white shadow-sm" title="Edit">
                         <i class="bi bi-pencil-fill"></i>
                     </a>
-                    <form action="{{ route('adminrektor.surat-keluar-eksternal.destroy', $surat->id) }}" method="POST" class="d-inline">
+                    <!-- <form action="{{ route('adminrektor.surat-keluar-eksternal.destroy', $surat->id) }}" method="POST" class="d-inline">
                         @csrf @method('DELETE')
                         <button type="submit" class="btn btn-danger btn-sm shadow-sm" title="Hapus" onclick="return confirm('Hapus permohonan surat ini?')">
                             <i class="bi bi-trash-fill"></i>
                         </button>
-                    </form>
+                    </form> -->
                 @else
                     {{-- Tombol Terkunci jika sudah diproses atau selesai --}}
-                    <button class="btn btn-secondary btn-sm disabled shadow-sm" title="Data sudah diproses, tidak bisa diubah">
+                    <!-- <button class="btn btn-secondary btn-sm disabled shadow-sm" title="Data sudah diproses, tidak bisa diubah">
                         <i class="bi bi-lock-fill"></i>
-                    </button>
+                    </button> -->
                 @endif
             </div>
         </td>

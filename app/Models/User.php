@@ -21,6 +21,7 @@ class User extends Authenticatable
         'no_hp',
         'role',      // <-- TAMBAHKAN INI
         'satker_id', // <-- TAMBAHKAN INI
+        'jabatan_id',
     ];
 
     /**
@@ -75,4 +76,7 @@ class User extends Authenticatable
     {
         return $this->hasMany(Surat::class, 'tujuan_user_id');
     }
+    public function jabatan() {
+    return $this->belongsTo(Jabatan::class, 'jabatan_id');
+}
 }

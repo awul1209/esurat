@@ -188,7 +188,7 @@
 <tr>
     <td class="text-center fw-bold">{{ $loop->iteration }}</td>
     <td>
-        <!-- <span class="fw-bold text-dark">{{ $namaSatker }}</span><br> -->
+        <span class="fw-bold text-dark">{{ $namaSatker }}</span><br>
         <small class="text-muted"><i class="bi bi-person-circle"></i> {{ $penginput }}</small>
     </td>
     <td>

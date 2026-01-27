@@ -326,98 +326,91 @@ if ($request->asal_tabel == 'surat_keluar') {
     return view('satker.internal.surat_keluar_index', compact('suratKeluar'));
 }
 
-  public function exportKeluar(Request $request)
-    {
-        // 1. Ambil Input & User
-        $startDate = $request->start_date;
-        $endDate   = $request->end_date;
-        $userId    = Auth::id();
+ public function exportKeluar(Request $request)
+{
+    $startDate = $request->start_date;
+    $endDate   = $request->end_date;
+    $userId    = Auth::id();
 
-        // 2. Definisi Class Export (Anonymous Class)
-        $export = new class($startDate, $endDate, $userId) implements FromCollection, WithHeadings, WithMapping, ShouldAutoSize, WithStyles {
-            
-            protected $startDate;
-            protected $endDate;
-            protected $userId;
+    $export = new class($startDate, $endDate, $userId) implements FromCollection, WithHeadings, WithMapping, ShouldAutoSize, WithStyles {
+        
+        protected $startDate;
+        protected $endDate;
+        protected $userId;
 
-            public function __construct($startDate, $endDate, $userId)
-            {
-                $this->startDate = $startDate;
-                $this->endDate   = $endDate;
-                $this->userId    = $userId;
+        public function __construct($startDate, $endDate, $userId)
+        {
+            $this->startDate = $startDate;
+            $this->endDate   = $endDate;
+            $this->userId    = $userId;
+        }
+
+        public function collection()
+        {
+            // Ambil riwayat untuk cek tujuan langsung (direct)
+            $query = SuratKeluar::with(['penerimaInternal', 'riwayats.penerima'])
+                ->where('tipe_kirim', 'internal')
+                ->where('user_id', $this->userId);
+
+            if ($this->startDate && $this->endDate) {
+                $query->whereBetween('tanggal_surat', [$this->startDate, $this->endDate]);
             }
 
-            // A. QUERY DATA
-            public function collection()
-            {
-                $query = SuratKeluar::with(['penerimaInternal'])
-                    ->where('tipe_kirim', 'internal')
-                    ->where('user_id', $this->userId);
+            return $query->latest('tanggal_surat')->get();
+        }
 
-                if ($this->startDate && $this->endDate) {
-                    $query->whereBetween('tanggal_surat', [$this->startDate, $this->endDate]);
-                }
+        public function headings(): array
+        {
+            return ['No', 'No Surat', 'Perihal', 'Tanggal Kirim', 'Tujuan', 'Link Surat'];
+        }
 
-                return $query->latest('tanggal_surat')->get();
+        public function map($surat): array
+        {
+            $tujuan = '-';
+
+            // LOGIKA: Ambil riwayat yang dibuat oleh pembuat surat ini (Direct Send)
+            // Bukan hasil delegasi orang lain.
+            $directRecipient = $surat->riwayats
+                ->where('user_id', $this->userId) // Harus dibuat oleh user yang sama dengan pembuat surat
+                ->whereNotNull('penerima_id');
+
+            if ($directRecipient->isNotEmpty()) {
+                // Jika ditemukan pengiriman langsung ke pegawai saat surat dibuat
+                $tujuan = $directRecipient->map(function($r) {
+                    return $r->penerima->name ?? '-';
+                })->unique()->join(', ');
+            } elseif ($surat->penerimaInternal->count() > 0) {
+                // Jika tidak ke pegawai, cek apakah ke Satker
+                $tujuan = $surat->penerimaInternal->pluck('nama_satker')->join(', ');
+            } else {
+                // Fallback ke kolom teks manual
+                $tujuan = $surat->tujuan_surat ?? '-';
             }
 
-            // B. HEADER KOLOM (SESUAI REQUEST)
-            public function headings(): array
-            {
-                return [
-                    'No',
-                    'No Surat',
-                    'Perihal',
-                    'Tanggal Kirim',
-                    'Tujuan',
-                    'Link Surat (Download)', // Kolom Baru
-                ];
-            }
+            $linkFile = $surat->file_surat ? url('storage/' . $surat->file_surat) : 'Tidak ada file';
 
-            // C. ISI DATA PER BARIS
-            public function map($surat): array
-            {
-                // 1. Logika Nama Tujuan
-                $tujuan = '-';
-                if (!empty($surat->tujuan_surat)) {
-                    $tujuan = $surat->tujuan_surat;
-                } elseif ($surat->penerimaInternal->count() > 0) {
-                    // Ambil nama satker, pisahkan koma
-                    $tujuan = $surat->penerimaInternal->pluck('nama_satker')->join(', ');
-                }
+            static $no = 0;
+            $no++;
 
-                // 2. Generate Link File Lengkap
-                // Menggunakan url() agar jadi http://domain.com/storage/...
-                $linkFile = $surat->file_surat ? url('storage/' . $surat->file_surat) : 'Tidak ada file';
+            return [
+                $no,
+                $surat->nomor_surat,
+                $surat->perihal,
+                \Carbon\Carbon::parse($surat->tanggal_surat)->format('d-m-Y'), 
+                $tujuan,
+                $linkFile,
+            ];
+        }
 
-                // Nomor Urut
-                static $no = 0;
-                $no++;
+        public function styles(Worksheet $sheet)
+        {
+            return [1 => ['font' => ['bold' => true]]];
+        }
+    };
 
-                return [
-                    $no,
-                    $surat->nomor_surat,
-                    $surat->perihal,
-                    // Format Tanggal (d-m-Y)
-                    \Carbon\Carbon::parse($surat->tanggal_surat)->format('d-m-Y'), 
-                    $tujuan,
-                    $linkFile, // Link dimasukkan di sini
-                ];
-            }
-
-            // D. STYLING HEADER (BOLD)
-            public function styles(Worksheet $sheet)
-            {
-                return [
-                    1 => ['font' => ['bold' => true]], // Baris 1 Bold
-                ];
-            }
-        };
-
-        // 3. Download File
-        $namaFile = 'Laporan_Surat_Keluar_Internal_' . date('d-m-Y_H-i') . '.xlsx';
-        return Excel::download($export, $namaFile);
-    }
+    $namaFile = 'Laporan_Surat_Keluar_Internal_' . date('d-m-Y_H-i') . '.xlsx';
+    return Excel::download($export, $namaFile);
+}
 
     public function create()
     {

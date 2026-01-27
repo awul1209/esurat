@@ -1,5 +1,5 @@
 <?php
-
+// MENAMBAH SOFT DELETE
 namespace App\Http\Controllers\AdminRektor;
 
 use App\Http\Controllers\Controller;
@@ -156,19 +156,23 @@ class SuratKeluarEksternalController extends Controller
     /**
      * Hapus surat.
      */
-    public function destroy($id)
-    {
-        $surat = SuratKeluar::where('tipe_kirim', 'eksternal')->findOrFail($id);
+  public function destroy($id)
+{
+    // Pastikan hanya mencari surat tipe eksternal
+    $surat = \App\Models\SuratKeluar::where('tipe_kirim', 'eksternal')->findOrFail($id);
 
-        if ($surat->file_surat && Storage::disk('public')->exists($surat->file_surat)) {
-            Storage::disk('public')->delete($surat->file_surat);
-        }
+    /**
+     * PERBAIKAN LOGIKA SOFT DELETE:
+     * Cukup jalankan $surat->delete() saja. 
+     * JANGAN menghapus file di Storage agar data masih bisa di-restore lengkap dengan filenya.
+     * Laravel akan otomatis mengisi kolom 'deleted_at'.
+     */
+    
+    $surat->delete();
 
-        $surat->delete();
-
-        return redirect()->route('adminrektor.surat-keluar-eksternal.index')
-                         ->with('success', 'Surat eksternal berhasil dihapus.');
-    }
+    return redirect()->route('adminrektor.surat-keluar-eksternal.index')
+                     ->with('success', 'Surat eksternal berhasil dipindahkan ke sampah.');
+}
 
     /**
      * Export data ke Excel/CSV

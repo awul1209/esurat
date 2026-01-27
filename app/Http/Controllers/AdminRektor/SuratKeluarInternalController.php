@@ -1,5 +1,5 @@
 <?php
-
+// merubah metod hapus menjadi soft deleted
 namespace App\Http\Controllers\AdminRektor;
 
 use App\Http\Controllers\Controller;
@@ -269,19 +269,20 @@ public function update(Request $request, $id)
 
 public function destroy($id)
 {
-    $surat = SuratKeluar::findOrFail($id);
+    // Menggunakan findOrFail untuk memastikan data ada
+    $surat = \App\Models\SuratKeluar::findOrFail($id);
     
-    // Hapus File
-    if ($surat->file_surat && Storage::disk('public')->exists($surat->file_surat)) {
-        Storage::disk('public')->delete($surat->file_surat);
-    }
-
-    // Detach Pivot (Relasi) & Hapus Record
-    $surat->penerimaInternal()->detach();
-    $surat->delete();
+    /**
+     * LOGIKA SOFT DELETE:
+     * 1. Jangan hapus file dari Storage (agar saat di-restore file tetap ada).
+     * 2. Jangan detach() penerimaInternal (agar relasi tidak hilang).
+     * 3. Cukup jalankan delete() saja.
+     */
+    
+    $surat->delete(); // Laravel otomatis mengisi kolom deleted_at
 
     return redirect()->route('adminrektor.surat-keluar-internal.index')
-                     ->with('success', 'Surat berhasil dihapus.');
+                     ->with('success', 'Surat berhasil dipindahkan ke sampah (Soft Delete).');
 }
 
 public function getRiwayat($id)

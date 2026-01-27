@@ -1,5 +1,5 @@
 @extends('layouts.app')
-
+<!-- memunculkan btn hapus -->
 @push('styles')
 {{-- DataTables Bootstrap 5 CSS --}}
 <link href="https://cdn.datatables.net/v/bs5/dt-1.13.6/datatables.min.css" rel="stylesheet">
@@ -291,6 +291,12 @@
                         data-url="{{ route('adminrektor.surat-keluar-internal.riwayat', $surat->id) }}">
                     <i class="bi bi-clock-history" style="font-size: 12px;"></i>
                 </button>
+                                    <form action="{{ route('adminrektor.surat-keluar-internal.destroy', $surat->id) }}" method="POST" onsubmit="return confirm('Apakah Anda yakin ingin menghapus surat ini?');">
+                        @csrf @method('DELETE')
+                        <button type="submit" class="btn btn-sm btn-action btn-danger text-white shadow-sm" title="Hapus">
+                            <i class="bi bi-trash-fill" style="font-size: 12px;"></i>
+                        </button>
+                    </form>
 
                 {{-- 2. TOMBOL EDIT & HAPUS (HANYA JIKA BELUM LOCKED) --}}
                 @if(!$isLocked)
@@ -300,12 +306,12 @@
                         <i class="bi bi-pencil-fill" style="font-size: 12px;"></i>
                     </a>
                     
-                    <form action="{{ route('adminrektor.surat-keluar-internal.destroy', $surat->id) }}" method="POST" onsubmit="return confirm('Apakah Anda yakin ingin menghapus surat ini?');">
+                    <!-- <form action="{{ route('adminrektor.surat-keluar-internal.destroy', $surat->id) }}" method="POST" onsubmit="return confirm('Apakah Anda yakin ingin menghapus surat ini?');">
                         @csrf @method('DELETE')
                         <button type="submit" class="btn btn-sm btn-action btn-danger text-white shadow-sm" title="Hapus">
                             <i class="bi bi-trash-fill" style="font-size: 12px;"></i>
                         </button>
-                    </form>
+                    </form> -->
                 @endif
             </div>
         </td>

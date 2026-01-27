@@ -206,7 +206,7 @@
             @foreach($riwayatPegawai as $rp)
                 @php $namaPegawai = $rp->penerima->name ?? 'User Tidak Ditemukan'; @endphp
                 <div class="d-flex flex-column mb-1">
-                    <span class="fw-bold text-dark">{{ $namaPegawai }}</span>
+                    <!-- <span class="fw-bold text-dark">{{ $namaPegawai }}</span> -->
                     <span class="badge bg-light text-dark border text-start" style="width: fit-content; font-size: 10px;">
                         <i class="bi bi-person me-1 text-primary"></i> {{ $namaPegawai }}
                     </span>

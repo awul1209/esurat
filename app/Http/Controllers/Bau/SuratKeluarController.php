@@ -1,5 +1,5 @@
 <?php
-
+// MEMEPERBAIKI METOD EXPORT SURAT KELUAR INT/EKS DIGABUNG
 namespace App\Http\Controllers\Bau;
 
 use App\Http\Controllers\Controller;
@@ -73,33 +73,30 @@ public function indexEksternal(Request $request)
 }
 public function exportExcel(Request $request)
 {
-    // 1. Ambil Input (Jangan di-strtolower dulu, biarkan sesuai input view)
     $tipe = $request->input('type'); 
     $startDate = $request->input('start_date');
     $endDate = $request->input('end_date');
 
-    // 2. Query Dasar (Seperti Kode Awal Anda)
-    $query = \App\Models\SuratKeluar::with('penerimaInternal')
+    // 1. Tambahkan eager loading 'riwayats.penerima' untuk mengambil nama pegawai
+    $query = \App\Models\SuratKeluar::with(['penerimaInternal', 'riwayats.penerima'])
                 ->where('tipe_kirim', $tipe);
 
-    // 3. LOGIKA FIX: Hanya filter User ID jika tipenya INTERNAL
-    // Alasannya: Internal sering "bocor" data satker lain, sedangkan Eksternal (menurut Anda) sudah aman.
-    if (strtolower($tipe) == 'internal') {
-        $query->where('user_id', \Illuminate\Support\Facades\Auth::id());
-    }
+    // 2. PERBAIKAN: Selalu filter berdasarkan user_id Auth (BAU) 
+    // agar data eksternal tidak mengambil milik satker lain dan data internal tidak bocor.
+    $query->where('user_id', \Illuminate\Support\Facades\Auth::id());
 
-    // 4. Filter Tanggal
+    // 3. Filter Tanggal
     if ($startDate && $endDate) {
         $query->whereBetween('tanggal_surat', [$startDate, $endDate]);
     }
 
     $data = $query->latest()->get();
 
-    // 5. Generate CSV
-    $filename = "Surat_Keluar_" . ucfirst($tipe) . "_" . date('Ymd_His') . ".csv";
+    // 4. Generate CSV
+    $filename = "Surat_Keluar_BAU_" . ucfirst($tipe) . "_" . date('Ymd_His') . ".csv";
     
     $headers = [
-        "Content-type"        => "text/csv",
+        "Content-type"        => "text/csv; charset=UTF-8",
         "Content-Disposition" => "attachment; filename=$filename",
         "Pragma"              => "no-cache",
         "Cache-Control"       => "must-revalidate, post-check=0, pre-check=0",
@@ -108,21 +105,35 @@ public function exportExcel(Request $request)
 
     $columns = ['No', 'Nomor Surat', 'Perihal', 'Tujuan', 'Tanggal Surat', 'Link File'];
 
-    $callback = function() use($data, $columns) {
+    $callback = function() use($data, $columns, $tipe) {
         $file = fopen('php://output', 'w');
+        fprintf($file, chr(0xEF).chr(0xBB).chr(0xBF)); // BOM Fix agar terbaca rapi di Excel
         fputcsv($file, $columns); 
 
         foreach ($data as $index => $item) {
             
-            // Logika Tujuan
-            $tujuanText = $item->tujuan_surat;
-            
-            if (empty($tujuanText)) {
+            // --- LOGIKA TUJUAN (PERBAIKAN) ---
+            $tujuanText = '';
+
+            if (strtolower($tipe) == 'internal') {
+                // Prioritas 1: Jika ke Satker (Antar Satker)
                 if ($item->penerimaInternal->count() > 0) {
                     $tujuanText = $item->penerimaInternal->pluck('nama_satker')->implode(', ');
-                } else {
-                    $tujuanText = '-';
+                } 
+                // Prioritas 2: Jika ke Pegawai Langsung (Cek Riwayat)
+                elseif ($item->riwayats->whereNotNull('penerima_id')->count() > 0) {
+                    $tujuanText = $item->riwayats->whereNotNull('penerima_id')
+                                    ->pluck('penerima.name')
+                                    ->unique()
+                                    ->implode(', ');
+                } 
+                // Prioritas 3: Teks Manual
+                else {
+                    $tujuanText = $item->tujuan_surat ?? '-';
                 }
+            } else {
+                // Untuk Eksternal: Ambil dari tujuan_luar atau tujuan_surat
+                $tujuanText = $item->tujuan_luar ?? $item->tujuan_surat ?? '-';
             }
 
             $link = $item->file_surat ? asset('storage/' . $item->file_surat) : '-';
