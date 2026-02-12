@@ -45,13 +45,12 @@
             left: 0;
             top: 0;
             z-index: 1000;
-            transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1); /* Transisi smooth */
+            transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
             display: flex;
             flex-direction: column;
             box-shadow: 4px 0 24px 0 rgba(0,0,0,0.02);
         }
 
-        /* === HEADER SIDEBAR === */
         .sidebar-heading {
             padding: 0 24px;
             display: flex;
@@ -84,7 +83,6 @@
             transition: opacity 0.3s ease;
         }
 
-        /* === MENU LIST === */
         .list-group {
             padding: 10px 12px;
             overflow-y: auto;
@@ -131,7 +129,6 @@
             transition: transform 0.3s ease;
         }
 
-        /* Hover & Active Items (Menu Utama) */
         .list-group-item:hover {
             background-color: var(--hover-bg);
             color: #2c3e50;
@@ -157,50 +154,45 @@
             color: white;
         }
 
-        /* === SUBMENU === */
         .submenu .list-group-item {
             padding-left: 14px;
             margin-left: 20px;
-            font-size: 0.99rem; /* Font agak kecil dari menu utama */
+            font-size: 0.99rem;
             margin-bottom: 2px;
             opacity: 0.85;
-            color: var(--text-color); /* Warna awal abu */
-            background-color: transparent !important; /* Hapus background */
-            box-shadow: none !important; /* Hapus shadow */
-            border-radius: 0; /* Hapus radius */
+            color: var(--text-color);
+            background-color: transparent !important;
+            box-shadow: none !important;
+            border-radius: 0;
             overflow: hidden;
             width: 90%;
         }
         
-        /* Tambahkan Icon Dot Kecil untuk Submenu */
         .submenu .list-group-item i {
-            font-size: 0.5rem; /* Icon dot kecil */
+            font-size: 0.5rem;
             min-width: 20px;
             margin-right: 5px;
             display: inline-flex;
             align-items: center;
         }
 
-        /* Hover & Active Submenu: Cuma ganti warna teks */
         .submenu .list-group-item:hover,
         .submenu .list-group-item.active {
-            color: var(--active-bg) !important; /* Warna Biru */
+            color: var(--active-bg) !important;
             opacity: 1;
-            transform: translateX(5px); /* Geser dikit biar dinamis */
+            transform: translateX(5px);
         }
         
         .submenu .list-group-item.active i,
         .submenu .list-group-item:hover i {
-            color: var(--active-bg) !important; /* Icon ikut biru */
+            color: var(--active-bg) !important;
             transform: scale(1.2);
         }
 
-        /* Rotate Chevron saat expand */
         .list-group-item[aria-expanded="true"] .chevron-icon {
             transform: rotate(180deg);
         }
 
-        /* === CONTENT AREA === */
         #page-content-wrapper {
             margin-left: var(--sidebar-width);
             width: calc(100% - var(--sidebar-width));
@@ -221,7 +213,6 @@
             width: 100%;
         }
 
-        /* === TOGGLED STATE (DESKTOP) === */
         @media (min-width: 769px) {
             #app.toggled #sidebar-wrapper {
                 width: var(--sidebar-collapsed-width);
@@ -242,7 +233,6 @@
             #app.toggled .collapse.show { display: none; }
         }
 
-        /* === MOBILE RESPONSIVE & OVERLAY === */
         #sidebar-overlay {
             display: none;
             position: fixed;
@@ -291,15 +281,57 @@
                     <i class="bi bi-grid-fill"></i> <span class="menu-text">Dashboard</span>
                 </a>
 
-                {{-- ADMIN BAU --}}
-                @if(Auth::user()->role == 'bau')
+              @php
+    $role = Auth::user()->role;
+    $jabatan_id = Auth::user()->jabatan_id;
+    $satker_id = Auth::user()->satker_id;
+
+    // Logika Filter Pimpinan
+    $isPimpinanSatker = ($role == 'pimpinan' && in_array($jabatan_id, [2, 3, 4, 5, 6, 7]));
+    
+    // Identifikasi Khusus Satker BAU
+    $isKeluargaBAU = ($role == 'bau' || ($role == 'pimpinan' && $satker_id == 34));
+
+    // PERBAIKAN: Tambahkan kondisi whereHas untuk mengecek status surat induknya
+ $countTembusan = \App\Models\SuratTembusan::where(function($query) {
+        $query->where('user_id', Auth::id())
+              ->orWhere('satker_id', Auth::user()->satker_id);
+    })
+    ->whereHas('suratKeluar', function($q) {
+        // Samakan dengan logika di Controller agar angka notifikasi benar
+        $q->where('is_final', 1)
+          ->whereNotIn('status', ['Pending', 'Revisi']);
+    })
+    ->count();
+@endphp
+
+                {{-- MENU VALIDASI (Hanya untuk Pimpinan) --}}
+                @if($role == 'pimpinan')
+                    <div class="sidebar-heading mt-0 mb-0 small text-muted px-3 text-uppercase fw-bold" style="font-size: 10px;">Otoritas</div>
+                    <a href="{{ route('pimpinan.validasi.index') }}" class="list-group-item list-group-item-action {{ Request::routeIs('pimpinan.validasi.*') ? 'active' : '' }}">
+                      <i class="bi bi-shield-shaded text-warning"></i><span class="menu-text">Validasi Surat</span>
+                        @php
+                            $pendingCount = \App\Models\SuratValidasi::where('pimpinan_id', Auth::id())->where('status', 'pending')->count();
+                        @endphp
+                        @if($pendingCount > 0)
+                            <span class="badge rounded-pill bg-danger float-end" style="font-size: 10px;">{{ $pendingCount }}</span>
+                        @endif
+                    </a>
+                    {{-- MENU BARU: TEMBUSAN SURAT (Tampil untuk semua role yang berpotensi menerima tembusan) --}}
+    <a href="{{ route('surat.tembusan.index') }}" class="list-group-item list-group-item-action {{ Request::routeIs('surat.tembusan.*') ? 'active' : '' }}">
+       <i class="bi bi-megaphone-fill text-info"></i><span class="menu-text">Tembusan Surat</span>
+        @if($countTembusan > 0)
+            <span class="badge rounded-pill bg-info float-end" style="font-size: 10px;">{{ $countTembusan }}</span>
+        @endif
+    </a>
+                @endif
+
+                {{-- ADMIN & KEPALA BAU --}}
+                @if($isKeluargaBAU)
                     @php
-                        // Logic Active Kelompok Surat BAU
                         $smActiveBau = Request::routeIs('bau.surat.*');
                         $skActiveBau = Request::routeIs('bau.surat-keluar.*');
                         $inboxActiveBau = Request::routeIs('bau.inbox*');
-
-                        // Logic Active Kelompok Layanan Rektor
                         $skRektorActive = Request::routeIs('bau.verifikasi-rektor.*');
                         $disposisiActiveBau = Request::routeIs('bau.disposisi.*') || Request::routeIs('bau.riwayat.*');
                         $arsipRektorActive = Request::routeIs('bau.arsip-rektor.*');
@@ -309,7 +341,6 @@
                     <a href="{{ route('bau.inbox') }}" class="list-group-item list-group-item-action {{ $inboxActiveBau ? 'active' : '' }}">
                         <i class="bi bi-folder-symlink-fill"></i> <span class="menu-text">Inbox BAU</span>
                     </a>
-    
 
                     <a href="#menuSuratKeluarBau" data-bs-toggle="collapse" class="list-group-item list-group-item-action {{ $skActiveBau ? 'active' : '' }}" aria-expanded="{{ $skActiveBau ? 'true' : 'false' }}">
                         <i class="bi bi-send-fill"></i> <span class="menu-text">Surat Keluar</span>
@@ -326,10 +357,8 @@
                         </div>
                     </div>
 
-
-
                     <div class="sidebar-heading mt-0 mb-0 small text-muted px-3 text-uppercase fw-bold" style="font-size: 10px;">Layanan Rektor</div>
-                                    <a href="#menuSuratMasukBau" data-bs-toggle="collapse" class="list-group-item list-group-item-action {{ $smActiveBau ? 'active' : '' }}" aria-expanded="{{ $smActiveBau ? 'true' : 'false' }}">
+                    <a href="#menuSuratMasukBau" data-bs-toggle="collapse" class="list-group-item list-group-item-action {{ $smActiveBau ? 'active' : '' }}" aria-expanded="{{ $smActiveBau ? 'true' : 'false' }}">
                         <i class="bi bi-inbox-fill"></i> <span class="menu-text">Surat Masuk Rektor</span>
                         <i class="bi bi-chevron-down chevron-icon"></i>
                     </a>
@@ -344,7 +373,7 @@
                         </div>
                     </div>
 
-                      <a href="#menuVerifikasiRektor" data-bs-toggle="collapse" class="list-group-item list-group-item-action {{ $skRektorActive ? 'active' : '' }}" aria-expanded="{{ $skRektorActive ? 'true' : 'false' }}">
+                    <a href="#menuVerifikasiRektor" data-bs-toggle="collapse" class="list-group-item list-group-item-action {{ $skRektorActive ? 'active' : '' }}" aria-expanded="{{ $skRektorActive ? 'true' : 'false' }}">
                         <i class="bi bi-shield-check"></i> <span class="menu-text">Surat Keluar Rektor</span>
                         <i class="bi bi-chevron-down chevron-icon"></i>
                     </a>
@@ -353,10 +382,9 @@
                             <a href="{{ route('bau.verifikasi-rektor.index') }}" class="list-group-item list-group-item-action {{ Request::routeIs('bau.verifikasi-rektor.index') ? 'active' : '' }}">
                                 <i class="bi bi-circle-fill"></i> Eksternal
                             </a>
-{{-- Update bagian Verifikasi Surat Rektor > Internal --}}
-<a href="{{ route('bau.surat-internal-rektor.index') }}" class="list-group-item list-group-item-action {{ Request::routeIs('bau.surat-internal-rektor.*') ? 'active' : '' }}">
-    <i class="bi bi-circle-fill"></i> Internal
-</a>
+                            <a href="{{ route('bau.surat-internal-rektor.index') }}" class="list-group-item list-group-item-action {{ Request::routeIs('bau.surat-internal-rektor.*') ? 'active' : '' }}">
+                                <i class="bi bi-circle-fill"></i> Internal
+                            </a>
                         </div>
                     </div>
 
@@ -375,55 +403,48 @@
                         </div>
                     </div>
 
-                  
-
-                    {{-- MENU BARU: ARSIP SURAT REKTOR --}}
                     <a href="#menuArsipRektorBau" data-bs-toggle="collapse" class="list-group-item list-group-item-action {{ $arsipRektorActive ? 'active' : '' }}" aria-expanded="{{ $arsipRektorActive ? 'true' : 'false' }}">
                         <i class="bi bi-archive-fill"></i> <span class="menu-text">Arsip Surat Keluar</span>
                         <i class="bi bi-chevron-down chevron-icon"></i>
                     </a>
                     <div class="collapse {{ $arsipRektorActive ? 'show' : '' }}" id="menuArsipRektorBau">
                         <div class="list-group list-group-flush submenu">
-                    <a href="{{ route('bau.arsip-rektor.eksternal') }}" class="list-group-item list-group-item-action {{ Request::routeIs('bau.arsip-rektor.eksternal') ? 'active' : '' }}">
+                            <a href="{{ route('bau.arsip-rektor.eksternal') }}" class="list-group-item list-group-item-action {{ Request::routeIs('bau.arsip-rektor.eksternal') ? 'active' : '' }}">
                                 <i class="bi bi-circle-fill"></i> Eksternal
                             </a>
-<a href="{{ route('bau.arsip-rektor.internal') }}" class="list-group-item list-group-item-action {{ Request::routeIs('bau.arsip-rektor.internal') ? 'active' : '' }}">
-    <i class="bi bi-circle-fill"></i> Internal
-</a>
+                            <a href="{{ route('bau.arsip-rektor.internal') }}" class="list-group-item list-group-item-action {{ Request::routeIs('bau.arsip-rektor.internal') ? 'active' : '' }}">
+                                <i class="bi bi-circle-fill"></i> Internal
+                            </a>
                         </div>
                     </div>
 
-{{-- Pengaturan Section --}}
-<div class="sidebar-heading mt-0 mb-1 small text-muted px-3 text-uppercase fw-bold" style="font-size: 10px;">Pengaturan</div>
+                    {{-- Pengaturan Section --}}
+                    <div class="sidebar-heading mt-0 mb-1 small text-muted px-3 text-uppercase fw-bold" style="font-size: 10px;">Pengaturan</div>
 
-{{-- Menu Master Data --}}
-<a href="#menuMasterDataBau" data-bs-toggle="collapse" class="list-group-item list-group-item-action {{ Request::routeIs('bau.manajemen-user.*') ? 'active' : '' }}" aria-expanded="{{ Request::routeIs('bau.manajemen-user.*') ? 'true' : 'false' }}">
-    <i class="bi bi-gear-fill"></i> <span class="menu-text">Master Data</span>
-    <i class="bi bi-chevron-down chevron-icon"></i>
-</a>
-<div class="collapse {{ Request::routeIs('bau.manajemen-user.*') ? 'show' : '' }}" id="menuMasterDataBau">
-    <div class="list-group list-group-flush submenu">
-        <a href="{{ route('bau.manajemen-user.index') }}" class="list-group-item list-group-item-action {{ Request::routeIs('bau.manajemen-user.*') ? 'active' : '' }}">
-            <i class="bi bi-circle-fill"></i> Data User
-        </a>
-    </div>
-</div>
+                    <a href="#menuMasterDataBau" data-bs-toggle="collapse" class="list-group-item list-group-item-action {{ Request::routeIs('bau.manajemen-user.*') ? 'active' : '' }}" aria-expanded="{{ Request::routeIs('bau.manajemen-user.*') ? 'true' : 'false' }}">
+                        <i class="bi bi-gear-fill"></i> <span class="menu-text">Master Data</span>
+                        <i class="bi bi-chevron-down chevron-icon"></i>
+                    </a>
+                    <div class="collapse {{ Request::routeIs('bau.manajemen-user.*') ? 'show' : '' }}" id="menuMasterDataBau">
+                        <div class="list-group list-group-flush submenu">
+                            <a href="{{ route('bau.manajemen-user.index') }}" class="list-group-item list-group-item-action {{ Request::routeIs('bau.manajemen-user.*') ? 'active' : '' }}">
+                                <i class="bi bi-circle-fill"></i> Data User
+                            </a>
+                        </div>
+                    </div>
 
-{{-- MENU BARU: Tempat Sampah (Diletakkan di bawah Master Data) --}}
-<a href="{{ route('bau.trash.index') }}" class="list-group-item list-group-item-action {{ Request::routeIs('bau.trash.*') ? 'active' : '' }}">
-    <i class="bi bi-trash3-fill"></i> <span class="menu-text">Tempat Sampah</span>
-    @php
-        // Opsional: Menampilkan badge jumlah item di tempat sampah jika ingin lebih informatif
-        $trashCount = \App\Models\Surat::onlyTrashed()->count() + \App\Models\SuratKeluar::onlyTrashed()->count();
-    @endphp
-    @if($trashCount > 0)
-        <span class="badge rounded-pill bg-danger float-end" style="font-size: 10px;">{{ $trashCount }}</span>
-    @endif
-</a>
+                    <a href="{{ route('bau.trash.index') }}" class="list-group-item list-group-item-action {{ Request::routeIs('bau.trash.*') ? 'active' : '' }}">
+                        <i class="bi bi-trash3-fill"></i> <span class="menu-text">Tempat Sampah</span>
+                        @php
+                            $trashCount = \App\Models\Surat::onlyTrashed()->count() + \App\Models\SuratKeluar::onlyTrashed()->count();
+                        @endphp
+                        @if($trashCount > 0)
+                            <span class="badge rounded-pill bg-danger float-end" style="font-size: 10px;">{{ $trashCount }}</span>
+                        @endif
+                    </a>
 
-
-                {{-- MENU SATKER --}}
-                @elseif(Auth::user()->role == 'satker')
+                {{-- MENU SATKER (Selain BAU) --}}
+                @elseif(($role == 'admin_satker' || $isPimpinanSatker) && !$isKeluargaBAU)
                     <a href="#menuSuratMasukSatker" data-bs-toggle="collapse" class="list-group-item list-group-item-action {{ (Request::routeIs('satker.surat-masuk.*') || Request::routeIs('satker.surat-masuk.internal')) ? 'active' : '' }}">
                         <i class="bi bi-inbox-fill"></i> <span class="menu-text">Surat Masuk</span>
                         <i class="bi bi-chevron-down chevron-icon"></i>
@@ -472,8 +493,8 @@
                         <i class="bi bi-person-gear"></i> <span class="menu-text">Manajemen User</span>
                     </a>
 
-                {{-- ADMIN REKTOR --}}
-                @elseif(Auth::user()->role == 'admin_rektor')
+                {{-- ADMIN REKTOR & REKTOR --}}
+                @elseif($role == 'admin_rektor' || ($role == 'pimpinan' && $jabatan_id == 1))
                     <a href="#menuSuratMasukRektor" data-bs-toggle="collapse" class="list-group-item list-group-item-action {{ (Request::routeIs('adminrektor.suratmasuk.*') || Request::routeIs('adminrektor.disposisi.show')) ? 'active' : '' }}">
                         <i class="bi bi-inbox-fill"></i> <span class="menu-text">Surat Masuk</span>
                         <i class="bi bi-chevron-down chevron-icon"></i>
@@ -488,7 +509,7 @@
                             </a>
                         </div>
                     </div>
-                      <a href="#menuSuratKeluarRektor" data-bs-toggle="collapse" class="list-group-item list-group-item-action {{ Request::routeIs('adminrektor.suratkeluar.*') ? 'active' : '' }}">
+                    <a href="#menuSuratKeluarRektor" data-bs-toggle="collapse" class="list-group-item list-group-item-action {{ Request::routeIs('adminrektor.suratkeluar.*') ? 'active' : '' }}">
                         <i class="bi bi-send-fill"></i> <span class="menu-text">Surat Keluar</span>
                         <i class="bi bi-chevron-down chevron-icon"></i>
                     </a>
@@ -514,33 +535,29 @@
                     </a>
 
                 {{-- PEGAWAI --}}
-              @elseif(Auth::user()->role == 'pegawai')
-    {{-- Menu Surat Masuk --}}
-    <a href="#menuSuratMasukPegawai" data-bs-toggle="collapse" 
-       class="list-group-item list-group-item-action {{ Request::is('pegawai/surat-masuk*') ? 'active' : '' }}">
-        <i class="bi bi-inbox-fill"></i> <span class="menu-text">Surat Masuk</span>
-        <i class="bi bi-chevron-down chevron-icon"></i>
-    </a>
-    <div class="collapse {{ Request::is('pegawai/surat-masuk*') ? 'show' : '' }}" id="menuSuratMasukPegawai">
-        <div class="list-group list-group-flush submenu">
-            {{-- Gabungan Internal & Eksternal --}}
-            <a href="{{ route('pegawai.surat.pribadi') }}" 
-               class="list-group-item list-group-item-action {{ Request::routeIs('pegawai.surat.pribadi') ? 'active' : '' }}">
-                <i class="bi bi-circle-fill"></i> Pribadi & Delegasi
-            </a>
-            {{-- Surat Edaran Satker --}}
-            <a href="{{ route('pegawai.surat.umum') }}" 
-               class="list-group-item list-group-item-action {{ Request::routeIs('pegawai.surat.umum') ? 'active' : '' }}">
-                <i class="bi bi-circle-fill"></i> Surat Umum
-            </a>
-        </div>
-    </div>
+                @elseif($role == 'pegawai')
+                    <a href="#menuSuratMasukPegawai" data-bs-toggle="collapse" 
+                        class="list-group-item list-group-item-action {{ Request::is('pegawai/surat-masuk*') ? 'active' : '' }}">
+                        <i class="bi bi-inbox-fill"></i> <span class="menu-text">Surat Masuk</span>
+                        <i class="bi bi-chevron-down chevron-icon"></i>
+                    </a>
+                    <div class="collapse {{ Request::is('pegawai/surat-masuk*') ? 'show' : '' }}" id="menuSuratMasukPegawai">
+                        <div class="list-group list-group-flush submenu">
+                            <a href="{{ route('pegawai.surat.pribadi') }}" 
+                                class="list-group-item list-group-item-action {{ Request::routeIs('pegawai.surat.pribadi') ? 'active' : '' }}">
+                                <i class="bi bi-circle-fill"></i> Pribadi & Delegasi
+                            </a>
+                            <a href="{{ route('pegawai.surat.umum') }}" 
+                                class="list-group-item list-group-item-action {{ Request::routeIs('pegawai.surat.umum') ? 'active' : '' }}">
+                                <i class="bi bi-circle-fill"></i> Surat Umum
+                            </a>
+                        </div>
+                    </div>
 
-    {{-- Manajemen Profil --}}
-    <a href="{{ route('profil.edit') }}" class="list-group-item list-group-item-action {{ Request::routeIs('profil.edit') ? 'active' : '' }}">
-        <i class="bi bi-person-gear"></i> <span class="menu-text">Manajemen User</span>
-    </a>
-@endif
+                    <a href="{{ route('profil.edit') }}" class="list-group-item list-group-item-action {{ Request::routeIs('profil.edit') ? 'active' : '' }}">
+                        <i class="bi bi-person-gear"></i> <span class="menu-text">Manajemen User</span>
+                    </a>
+                @endif
             </div>
         </div>
         
@@ -555,48 +572,45 @@
                         <span class="navbar-toggler-icon"></span>
                     </button>
 
-          <div class="collapse navbar-collapse" id="navbarSupportedContent">
-    <ul class="navbar-nav ms-auto mt-2 mt-lg-0 align-items-center">
-        <li class="nav-item dropdown">
-            <a id="navbarDropdown" class="nav-link dropdown-toggle text-dark d-flex align-items-center" href="#" role="button" data-bs-toggle="dropdown">
-                <div class="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center me-2 shadow-sm" style="width: 35px; height: 35px; font-size: 0.9rem; flex-shrink: 0;">
-                    {{ substr(Auth::user()->name, 0, 1) }}
-                </div>
-                
-                <div class="d-flex flex-column align-items-start leading-tight">
-                    <span class="fw-bold small lh-1">{{ Auth::user()->name }}</span>
-                    <small class="text-muted fw-medium" style="font-size: 10px; margin-top: 2px;">
-                        @if(Auth::user()->role == 'bau')
-                            Admin BAU
-                        @elseif(Auth::user()->role == 'admin_rektor')
-                            Admin Rektor
-                        @elseif(Auth::user()->role == 'satker')
-                            Admin {{ Auth::user()->satker->nama_satker ?? 'Fakultas' }}
-                        @elseif(Auth::user()->role == 'pegawai')
-                            Pegawai {{ Auth::user()->satker->nama_satker ?? 'Unit' }}
-                        @else
-                            {{ ucfirst(Auth::user()->role) }}
-                        @endif
-                    </small>
-                </div>
-            </a>
-            
-            <div class="dropdown-menu dropdown-menu-end shadow border-0 mt-2" aria-labelledby="navbarDropdown">
-                <a class="dropdown-item small" href="{{ route('profil.edit') }}">
-                    <i class="bi bi-person-circle me-2"></i> Edit Profil
-                </a>
-                <div class="dropdown-divider"></div>
-                <a class="dropdown-item small text-danger" href="{{ route('logout') }}"
-                   onclick="event.preventDefault(); document.getElementById('logout-form').submit();">
-                    <i class="bi bi-box-arrow-right me-2"></i> Logout
-                </a>
-                <form id="logout-form" action="{{ route('logout') }}" method="POST" class="d-none">
-                    @csrf
-                </form>
-            </div>
-        </li>
-    </ul>
-</div>
+                    <div class="collapse navbar-collapse" id="navbarSupportedContent">
+                        <ul class="navbar-nav ms-auto mt-2 mt-lg-0 align-items-center">
+                            <li class="nav-item dropdown">
+                                <a id="navbarDropdown" class="nav-link dropdown-toggle text-dark d-flex align-items-center" href="#" role="button" data-bs-toggle="dropdown">
+                                    <div class="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center me-2 shadow-sm" style="width: 35px; height: 35px; font-size: 0.9rem; flex-shrink: 0;">
+                                        {{ substr(Auth::user()->name, 0, 1) }}
+                                    </div>
+                                    
+                                    <div class="d-flex flex-column align-items-start leading-tight">
+                                        <span class="fw-bold small lh-1">{{ Auth::user()->name }}</span>
+                                        <small class="text-muted fw-medium" style="font-size: 10px; margin-top: 2px;">
+                                            @php
+                                                $jabatanMap = [
+                                                    1 => 'Rektor', 2 => 'Warek I', 3 => 'Warek II', 4 => 'Warek III',
+                                                    5 => 'Dekan', 6 => 'Wadek', 7 => 'Kepala Biro/Biro', 8 => 'Admin Unit', 9 => 'Staf/Dosen'
+                                                ];
+                                                $label = $jabatanMap[Auth::user()->jabatan_id] ?? ucfirst(Auth::user()->role);
+                                            @endphp
+                                            {{ $label }} {{ Auth::user()->satker ? '- ' . Auth::user()->satker->nama_satker : '' }}
+                                        </small>
+                                    </div>
+                                </a>
+                                
+                                <div class="dropdown-menu dropdown-menu-end shadow border-0 mt-2" aria-labelledby="navbarDropdown">
+                                    <a class="dropdown-item small" href="{{ route('profil.edit') }}">
+                                        <i class="bi bi-person-circle me-2"></i> Edit Profil
+                                    </a>
+                                    <div class="dropdown-divider"></div>
+                                    <a class="dropdown-item small text-danger" href="{{ route('logout') }}"
+                                       onclick="event.preventDefault(); document.getElementById('logout-form').submit();">
+                                        <i class="bi bi-box-arrow-right me-2"></i> Logout
+                                    </a>
+                                    <form id="logout-form" action="{{ route('logout') }}" method="POST" class="d-none">
+                                        @csrf
+                                    </form>
+                                </div>
+                            </li>
+                        </ul>
+                    </div>
                 </div>
             </nav>
 

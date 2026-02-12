@@ -45,7 +45,7 @@
                         {{-- Bagian 1: Identitas --}}
                         <div class="section-title">Informasi Pribadi</div>
                         <div class="row g-3 mb-4">
-                            <div class="col-md-12">
+                            <div class="col-md-7">
                                 <label for="name" class="form-label">Nama Lengkap <span class="text-danger">*</span></label>
                                 <div class="input-group">
                                     <span class="input-group-text bg-light"><i class="bi bi-person"></i></span>
@@ -53,6 +53,15 @@
                                            id="name" name="name" value="{{ old('name', $user->name) }}" required placeholder="Nama Lengkap User">
                                 </div>
                                 @error('name') <div class="text-danger small mt-1">{{ $message }}</div> @enderror
+                            </div>
+                            <div class="col-md-5">
+                                <label for="no_hp" class="form-label">Nomor WhatsApp / HP</label>
+                                <div class="input-group">
+                                    <span class="input-group-text bg-light"><i class="bi bi-whatsapp"></i></span>
+                                    <input type="text" class="form-control @error('no_hp') is-invalid @enderror" 
+                                           name="no_hp" value="{{ old('no_hp', $user->no_hp) }}" placeholder="Contoh: 628123456789">
+                                </div>
+                                @error('no_hp') <div class="text-danger small mt-1">{{ $message }}</div> @enderror
                             </div>
                         </div>
 
@@ -79,31 +88,24 @@
                                 @error('email2') <div class="text-danger small mt-1">{{ $message }}</div> @enderror
                             </div>
                         </div>
-                        <div class="col-12">
-    <label for="no_hp" class="form-label">Nomor WhatsApp / HP</label>
-    <div class="input-group">
-        <span class="input-group-text bg-light"><i class="bi bi-whatsapp"></i></span>
-        <input type="text" class="form-control" name="no_hp" value="{{ old('no_hp', $user->no_hp) }}" placeholder="62812xxx, 62877xxx">
-    </div>
-    <div class="form-text small">Gunakan awalan 62. Pisahkan dengan koma jika lebih dari satu nomor.</div>
-</div>
 
-                        {{-- Bagian 3: Hak Akses --}}
+                        {{-- Bagian 3: Hak Akses & Penempatan --}}
                         <div class="section-title">Otoritas & Penempatan</div>
                         <div class="row g-3 mb-4">
-                            <div class="col-md-6">
+                            <div class="col-md-4">
                                 <label for="role" class="form-label">Role / Peran <span class="text-danger">*</span></label>
                                 <select class="form-select @error('role') is-invalid @enderror" id="role" name="role" required>
                                     <option value="">-- Pilih Role --</option>
-                                    <option value="bau" {{ old('role', $user->role) == 'bau' ? 'selected' : '' }}>Admin BAU</option>
                                     <option value="admin_rektor" {{ old('role', $user->role) == 'admin_rektor' ? 'selected' : '' }}>Admin Rektor</option>
-                                    <option value="satker" {{ old('role', $user->role) == 'satker' ? 'selected' : '' }}>Admin Satker</option>
+                                    <option value="bau" {{ old('role', $user->role) == 'bau' ? 'selected' : '' }}>Admin BAU</option>
+                                    <option value="admin_satker" {{ old('role', $user->role) == 'admin_satker' ? 'selected' : '' }}>Admin Satker</option>
+                                    <option value="pimpinan" {{ old('role', $user->role) == 'pimpinan' ? 'selected' : '' }}>Pimpinan (Validator)</option>
                                     <option value="pegawai" {{ old('role', $user->role) == 'pegawai' ? 'selected' : '' }}>Pegawai</option>
                                 </select>
                                 @error('role') <div class="text-danger small mt-1">{{ $message }}</div> @enderror
                             </div>
 
-                            <div class="col-md-6">
+                            <div class="col-md-4">
                                 <label for="satker_id" class="form-label">Satuan Kerja (Satker)</label>
                                 <select class="form-select @error('satker_id') is-invalid @enderror" id="satker_id" name="satker_id">
                                     <option value="">-- Tidak Terhubung ke Satker --</option>
@@ -115,16 +117,30 @@
                                 </select>
                                 @error('satker_id') <div class="text-danger small mt-1">{{ $message }}</div> @enderror
                             </div>
+
+                            <div class="col-md-4">
+                                <label for="jabatan_id" class="form-label">Jabatan Struktural</label>
+                                <select class="form-select @error('jabatan_id') is-invalid @enderror" id="jabatan_id" name="jabatan_id">
+                                    <option value="">-- Pilih Jabatan --</option>
+                                    @foreach ($daftarJabatan as $jabatan)
+                                        <option value="{{ $jabatan->id }}" {{ old('jabatan_id', $user->jabatan_id) == $jabatan->id ? 'selected' : '' }}>
+                                            {{ $jabatan->nama_jabatan }}
+                                        </option>
+                                    @endforeach
+                                </select>
+                                @error('jabatan_id') <div class="text-danger small mt-1">{{ $message }}</div> @enderror
+                            </div>
                         </div>
 
                         {{-- Bagian 4: Keamanan --}}
-                        <div class="bg-light p-4 rounded-3 border mb-4">
+                        <div class="bg-light p-4 rounded-3 border mb-4 shadow-sm">
                             <div class="section-title border-0 mb-2">Ganti Password</div>
                             <div class="row g-3">
                                 <div class="col-md-6">
                                     <label for="password" class="form-label">Password Baru</label>
                                     <input type="password" class="form-control @error('password') is-invalid @enderror" 
-                                           id="password" name="password" placeholder="Kosongkan jika tidak diubah">
+                                           id="password" name="password" placeholder="Kosongkan jika tidak ingin mengubah password">
+                                    <div class="form-text small text-info"><i class="bi bi-info-circle"></i> Minimal 6 karakter jika diisi.</div>
                                     @error('password') <div class="text-danger small mt-1">{{ $message }}</div> @enderror
                                 </div>
                                 <div class="col-md-6">

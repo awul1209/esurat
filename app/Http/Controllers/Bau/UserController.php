@@ -26,57 +26,71 @@ class UserController extends Controller
     /**
      * Menampilkan form untuk membuat user baru.
      */
-    public function create()
-    {
-        $daftarSatker = Satker::orderBy('nama_satker')->get();
-        return view('bau.manajemen-user.create', compact('daftarSatker'));
-    }
+public function create()
+{
+    $daftarSatker = \App\Models\Satker::orderBy('nama_satker')->get();
+    // Tambahkan pengambilan data jabatan
+    $daftarJabatan = \App\Models\Jabatan::orderBy('nama_jabatan')->get();
+    
+    return view('bau.manajemen-user.create', compact('daftarSatker', 'daftarJabatan'));
+}
 
     /**
      * Menyimpan user baru ke database.
      */
-  public function store(Request $request)
+ public function store(Request $request)
 {
-    // 1. Validasi
+    // 1. Validasi Input
     $validated = $request->validate([
-        'name'      => 'required|string|max:255',
-        'email'     => 'required|string|email|max:255|unique:users,email',
-        'email2'    => 'nullable|string|email|max:255|unique:users,email2', // <--- TAMBAHAN EMAIL 2
-        'no_hp'     => 'nullable|string|max:20',
-        'password'  => 'required|string|min:8|confirmed',
-        'role'      => 'required|in:bau,admin_rektor,satker,pegawai',
-        'satker_id' => 'nullable|exists:satkers,id',
+        'name'       => 'required|string|max:255',
+        'email'      => 'required|string|email|max:255|unique:users,email',
+        'email2'     => 'nullable|string|email|max:255|unique:users,email2',
+        'no_hp'      => 'nullable|string|max:20',
+        'password'   => 'required|string|min:6|confirmed', // Min 6 sesuai permintaan sebelumnya
+        'role'       => 'required|in:admin_rektor,bau,admin_satker,pimpinan,pegawai',
+        'satker_id'  => 'nullable|exists:satkers,id',
+        'jabatan_id' => 'nullable|exists:jabatans,id', // <--- TAMBAHAN JABATAN
     ]);
 
-    // 2. Buat User
-    User::create([
-        'name'      => $validated['name'],
-        'email'     => $validated['email'],
-        'email2'    => $validated['email2'], // <--- SIMPAN EMAIL 2
-        'no_hp'     => $validated['no_hp'],
-        'password'  => Hash::make($validated['password']),
-        'role'      => $validated['role'],
-        'satker_id' => $validated['satker_id'],
-    ]);
+    // 2. Proses Simpan dengan Transaction (Opsional tapi disarankan)
+    try {
+        \DB::transaction(function () use ($validated) {
+            User::create([
+                'name'       => $validated['name'],
+                'email'      => $validated['email'],
+                'email2'     => $validated['email2'],
+                'no_hp'      => $validated['no_hp'],
+                'password'   => Hash::make($validated['password']),
+                'role'       => $validated['role'],
+                'satker_id'  => $validated['satker_id'],
+                'jabatan_id' => $validated['jabatan_id'], // <--- SIMPAN JABATAN
+            ]);
+        });
 
-    return redirect()->route('bau.manajemen-user.index')
-                     ->with('success', 'User baru berhasil dibuat.');
+        return redirect()->route('bau.manajemen-user.index')
+                         ->with('success', 'User ' . $validated['name'] . ' berhasil dibuat.');
+
+    } catch (\Exception $e) {
+        return redirect()->back()
+                         ->withInput()
+                         ->with('error', 'Terjadi kesalahan: ' . $e->getMessage());
+    }
 }
 
     /**
      * Menampilkan form untuk mengedit user.
      */
-    public function edit(User $manajemen_user) // Nama variabel 'manajemen_user' harus cocok dengan rute
-    {
-        $user = $manajemen_user; // Ganti nama agar lebih mudah dibaca
-        $daftarSatker = Satker::orderBy('nama_satker')->get();
-        return view('bau.manajemen-user.edit', compact('user', 'daftarSatker'));
-    }
+ public function edit(User $manajemen_user)
+{
+    // Binding otomatis dari rute (User $manajemen_user)
+    $user = $manajemen_user;
+    $daftarSatker = \App\Models\Satker::orderBy('nama_satker')->get();
+    $daftarJabatan = \App\Models\Jabatan::orderBy('nama_jabatan')->get(); // Tambahkan ini
+    
+    return view('bau.manajemen-user.edit', compact('user', 'daftarSatker', 'daftarJabatan'));
+}
 
-    /**
-     * Mengupdate data user di database.
-     */
- public function update(Request $request, User $manajemen_user)
+public function update(Request $request, User $manajemen_user)
 {
     $user = $manajemen_user;
 
@@ -85,36 +99,40 @@ class UserController extends Controller
         'name' => 'required|string|max:255',
         'email' => [
             'required', 'string', 'email', 'max:255',
-            Rule::unique('users')->ignore($user->id),
+            \Illuminate\Validation\Rule::unique('users')->ignore($user->id),
         ],
-        // TAMBAHAN: Validasi Email 2 (Opsional tapi harus unik kecuali milik user ini sendiri)
         'email2' => [
             'nullable', 'string', 'email', 'max:255',
-            Rule::unique('users', 'email2')->ignore($user->id),
+            \Illuminate\Validation\Rule::unique('users', 'email2')->ignore($user->id),
         ],
-        // No HP tetap ada dengan max 255 sesuai keinginan Anda
         'no_hp' => 'nullable|string|max:255', 
-        'password' => 'nullable|string|min:8|confirmed',
-        'role' => 'required|in:bau,admin_rektor,satker,pegawai',
+        'password' => 'nullable|string|min:6|confirmed', // Nullable: boleh kosong jika tidak ganti
+        'role' => 'required|in:admin_rektor,bau,admin_satker,pimpinan,pegawai', // Sesuai tabel users
         'satker_id' => 'nullable|exists:satkers,id',
+        'jabatan_id' => 'nullable|exists:jabatans,id', // Tambahan Jabatan
     ]);
 
-    // 2. Update data dasar
-    $user->name = $validated['name'];
-    $user->email = $validated['email'];
-    $user->email2 = $validated['email2']; // <--- SIMPAN PERUBAHAN EMAIL 2
-    $user->no_hp = $validated['no_hp']; 
-    $user->role = $validated['role'];
-    $user->satker_id = $validated['satker_id'];
+    // 2. Update data dasar menggunakan fill (lebih ringkas)
+    $user->fill([
+        'name'       => $validated['name'],
+        'email'      => $validated['email'],
+        'email2'     => $validated['email2'],
+        'no_hp'      => $validated['no_hp'],
+        'role'       => $validated['role'],
+        'satker_id'  => $validated['satker_id'],
+        'jabatan_id' => $validated['jabatan_id'], // Update Jabatan
+    ]);
 
-    // 3. Cek jika password diisi (Hanya update jika admin mengetik password baru)
+    // 3. Logika Password Nullable
+    // filled() akan mengembalikan true jika input ada dan tidak kosong
     if ($request->filled('password')) {
-        $user->password = Hash::make($validated['password']);
+        $user->password = \Hash::make($request->password);
     }
 
     $user->save();
 
-    return redirect()->route('bau.manajemen-user.index')->with('success', 'Data user berhasil diperbarui.');
+    return redirect()->route('bau.manajemen-user.index')
+                     ->with('success', 'Data user ' . $user->name . ' berhasil diperbarui.');
 }
 
     /**

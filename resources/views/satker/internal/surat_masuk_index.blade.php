@@ -552,7 +552,6 @@
 
 {{-- ====================== MODAL TAMBAH ====================== --}}
 {{-- MODAL TAMBAH SURAT MASUK INTERNAL MANUAL (KHUSUS SATKER) --}}
-{{-- MODAL TAMBAH SURAT MASUK INTERNAL MANUAL (KHUSUS SATKER) --}}
 <div class="modal fade" id="tambahSuratModal" tabindex="-1" aria-hidden="true">
     {{-- 1. Tambahkan class modal-dialog-scrollable di sini --}}
     <div class="modal-dialog modal-lg modal-dialog-scrollable">
@@ -792,21 +791,32 @@
                     <div class="mb-3">
                         <label class="small fw-bold">Opsi Delegasi</label>
                         <select name="target_tipe" id="target_tipe" class="form-select shadow-sm" required onchange="togglePegawai()">
-                            <option value="pribadi">Pegawai Spesifik (Disposisi)</option>
+                            <option value="pribadi">Pegawai/Wadek Spesifik (Disposisi)</option>
                             <option value="semua">Sebar ke Semua Pegawai (Informasi)</option>
                         </select>
                     </div>
 
                     <div class="mb-3" id="group_pegawai">
-                        <label class="small fw-bold">Pilih Pegawai (Bisa lebih dari satu)</label>
+                        <label class="small fw-bold">Pilih Penerima (Bisa lebih dari satu)</label>
                         <select name="user_id[]" id="select_pegawai" class="form-select shadow-sm select2-delegasi" multiple="multiple">
-                            @foreach($pegawaiList as $p)
-                                <option value="{{ $p->id }}">{{ $p->name }}</option>
-                            @endforeach
+                            @if($wadekList->count() > 0)
+                                <optgroup label="Wadek / Pimpinan">
+                                    @foreach($wadekList as $w)
+                                        <option value="{{ $w->id }}">{{ $w->name }} ({{ strtoupper($w->role) }})</option>
+                                    @endforeach
+                                </optgroup>
+                            @endif
+                            
+                            @if($pegawaiList->count() > 0)
+                                <optgroup label="Pegawai Satker">
+                                    @foreach($pegawaiList as $p)
+                                        <option value="{{ $p->id }}">{{ $p->name }}</option>
+                                    @endforeach
+                                </optgroup>
+                            @endif
                         </select>
                     </div>
 
-                    {{-- Group Instruksi yang akan disembunyikan/muncul --}}
                     <div id="group_instruksi">
                         <div class="mb-3">
                             <label class="small fw-bold">Klasifikasi / Instruksi</label>

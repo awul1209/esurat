@@ -23,6 +23,11 @@ use SoftDeletes;
         'status',
         'via',
         'tanggal_terusan', // Tambahkan ini
+        'qrcode_hash',
+        'ukuran_kertas',
+        'verifikasi_url',
+        'pdf_password',
+        'is_final'
     ];
 
     protected $casts = [
@@ -56,8 +61,28 @@ public function penerimaInternal()
 {
     return $this->belongsToMany(Satker::class, 'surat_keluar_rektor_tujuan', 'surat_keluar_id', 'satker_id');
 }
-public function riwayats() {
-    return $this->hasMany(RiwayatSurat::class, 'surat_keluar_id');
+// File: app/Models/SuratKeluar.php
+public function riwayats()
+{
+    // Untuk surat internal, foreign key di riwayat_surats adalah 'surat_keluar_id'
+    return $this->hasMany(RiwayatSurat::class, 'surat_keluar_id', 'id');
+}
+
+// Di dalam class SuratKeluar
+public function validasis()
+{
+    // Mengacu pada tabel validasi yang kita bahas sebelumnya
+    return $this->hasMany(SuratValidasi::class, 'surat_keluar_id');
+}
+
+public function tembusans()
+{
+    return $this->hasMany(SuratTembusan::class, 'surat_keluar_id');
+}
+public function surats()
+{
+    return $this->hasMany(Surat::class, 'nomor_surat', 'nomor_surat'); 
+    // atau sesuaikan foreign key-nya, misal 'surat_keluar_id'
 }
 
     

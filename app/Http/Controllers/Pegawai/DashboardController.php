@@ -49,11 +49,7 @@ $allInbox = Surat::where(function($query) use ($user) {
             }, 'user.satker'])
             ->get();
 
-        // C. Surat Edaran (Umum Murni dari Rektorat/BAU)
-        $suratEdaran = $satker ? $satker->suratEdaran()
-            ->wherePivot('status', 'diteruskan_internal')
-            ->with(['riwayats.user'])
-            ->get() : collect();
+
 
         // --- 2. LOGIKA PEMISAHAN PRIBADI VS UMUM ---
         $suratPribadi = collect();
@@ -83,11 +79,7 @@ $allInbox = Surat::where(function($query) use ($user) {
             }
         }
 
-        // Tambahkan Surat Edaran ke kategori Umum
-        foreach ($suratEdaran as $se) {
-            $se->kategori_view = 'Umum';
-            $suratUmum->push($se);
-        }
+
 
         $allSuratMasuk = $suratPribadi->merge($suratUmum);
 

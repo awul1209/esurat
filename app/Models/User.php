@@ -17,11 +17,15 @@ class User extends Authenticatable
     protected $fillable = [
         'name',
         'email',
+        'email2',
         'password',
         'no_hp',
         'role',      // <-- TAMBAHKAN INI
         'satker_id', // <-- TAMBAHKAN INI
         'jabatan_id',
+        'is_active',
+        'nip',
+        'nik',
     ];
 
     /**

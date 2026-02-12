@@ -112,12 +112,19 @@ public function indexUntukBau(Request $request)
     // ------------------------------------------------------------------
     $suratUntukBau = $suratEksternal->merge($suratInternal)->sortByDesc('tgl_sort');
 
-    // ------------------------------------------------------------------
-    // 4. DATA PEGAWAI (Delegasi)
-    // ------------------------------------------------------------------
-    $pegawaiList = User::where('satker_id', $bauSatkerId)
-                     ->where('id', '!=', $user->id)
-                     ->get();
+// ------------------------------------------------------------------
+// 4. DATA PEGAWAI (Delegasi)
+// ------------------------------------------------------------------
+$pegawaiList = User::where('satker_id', $bauSatkerId)
+                ->where('id', '!=', $user->id) // Kecualikan diri sendiri
+                ->whereHas('jabatan', function($query) {
+                    // Filter: Kecualikan jabatan yang mengandung kata 'Kepala', 'Biro', atau 'Pimpinan'
+                    $query->where('nama_jabatan', 'NOT LIKE', '%Kepala%')
+                          ->where('nama_jabatan', 'NOT LIKE', '%Biro%')
+                          ->where('nama_jabatan', 'NOT LIKE', '%Pimpinan%');
+                })
+                ->orderBy('name', 'asc')
+                ->get();
 
     // ------------------------------------------------------------------
     // 5. DATA SATKER (UNTUK INPUT MANUAL INTERNAL) - PERBAIKAN DISINI
@@ -1095,7 +1102,7 @@ public function destroy(Surat $surat)
         return view('bau.disposisi_index', compact('suratDisposisi'));
     }
 
-   // arsip
+   //metod untuk aksi arsip BAU
  public function arsipkan($id)
     {
         try {

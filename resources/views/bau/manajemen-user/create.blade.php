@@ -94,32 +94,46 @@
                         </div>
 
                         <div class="section-title mt-4">Otoritas & Penempatan</div>
-                        <div class="row mb-4">
-                            <div class="col-md-6">
-                                <label for="role" class="form-label">Role / Peran: <span class="text-danger">*</span></label>
-                                <select class="form-select @error('role') is-invalid @enderror" id="role" name="role" required>
-                                    <option value="">-- Pilih Role --</option>
-                                    <option value="bau" {{ old('role') == 'bau' ? 'selected' : '' }}>Admin BAU</option>
-                                    <option value="admin_rektor" {{ old('role') == 'admin_rektor' ? 'selected' : '' }}>Admin Rektor</option>
-                                    <option value="satker" {{ old('role') == 'satker' ? 'selected' : '' }}>Admin Satker</option>
-                                    <option value="pegawai" {{ old('role') == 'pegawai' ? 'selected' : '' }}>Pegawai</option>
-                                </select>
-                                @error('role') <div class="invalid-feedback">{{ $message }}</div> @enderror
-                            </div>
-                            <div class="col-md-6">
-                                <label for="satker_id" class="form-label">Satuan Kerja (Satker):</label>
-                                <select class="form-select @error('satker_id') is-invalid @enderror" id="satker_id" name="satker_id">
-                                    <option value="">-- Tidak Terhubung ke Satker --</option>
-                                    @foreach ($daftarSatker as $satker)
-                                        <option value="{{ $satker->id }}" {{ old('satker_id') == $satker->id ? 'selected' : '' }}>
-                                            {{ $satker->nama_satker }}
-                                        </option>
-                                    @endforeach
-                                </select>
-                                <div class="form-text mt-1" style="font-size: 11px;">Kosongkan jika Admin Rektor / Super Admin.</div>
-                                @error('satker_id') <div class="invalid-feedback">{{ $message }}</div> @enderror
-                            </div>
-                        </div>
+<div class="row mb-4">
+    <div class="col-md-4">
+        <label for="role" class="form-label">Role / Peran: <span class="text-danger">*</span></label>
+        <select class="form-select @error('role') is-invalid @enderror" id="role" name="role" required>
+            <option value="">-- Pilih Role --</option>
+            <option value="admin_rektor" {{ old('role') == 'admin_rektor' ? 'selected' : '' }}>Admin Rektor</option>
+            <option value="bau" {{ old('role') == 'bau' ? 'selected' : '' }}>Admin BAU</option>
+            <option value="admin_satker" {{ old('role') == 'admin_satker' ? 'selected' : '' }}>Admin Satker</option>
+            <option value="pimpinan" {{ old('role') == 'pimpinan' ? 'selected' : '' }}>Pimpinan (Validator)</option>
+            <option value="pegawai" {{ old('role') == 'pegawai' ? 'selected' : '' }}>Pegawai</option>
+        </select>
+        @error('role') <div class="invalid-feedback">{{ $message }}</div> @enderror
+    </div>
+
+    <div class="col-md-4">
+        <label for="satker_id" class="form-label">Satuan Kerja (Satker):</label>
+        <select class="form-select @error('satker_id') is-invalid @enderror" id="satker_id" name="satker_id">
+            <option value="">-- Tidak Terhubung ke Satker --</option>
+            @foreach ($daftarSatker as $satker)
+                <option value="{{ $satker->id }}" {{ old('satker_id') == $satker->id ? 'selected' : '' }}>
+                    {{ $satker->nama_satker }}
+                </option>
+            @endforeach
+        </select>
+        @error('satker_id') <div class="invalid-feedback">{{ $message }}</div> @enderror
+    </div>
+
+    <div class="col-md-4">
+        <label for="jabatan_id" class="form-label">Jabatan:</label>
+        <select class="form-select @error('jabatan_id') is-invalid @enderror" id="jabatan_id" name="jabatan_id">
+            <option value="">-- Pilih Jabatan --</option>
+            @foreach ($daftarJabatan as $jabatan)
+                <option value="{{ $jabatan->id }}" {{ old('jabatan_id') == $jabatan->id ? 'selected' : '' }}>
+                    {{ $jabatan->nama_jabatan }}
+                </option>
+            @endforeach
+        </select>
+        @error('jabatan_id') <div class="invalid-feedback">{{ $message }}</div> @enderror
+    </div>
+</div>
 
                         <div class="row mt-5">
                             <div class="col-md-12 text-end">

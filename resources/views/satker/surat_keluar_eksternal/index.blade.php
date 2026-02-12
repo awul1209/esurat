@@ -122,14 +122,24 @@
                                 </div>
                             </td>
 
-                            {{-- NO SURAT & PERIHAL --}}
-                            <td>
-                                <span class="fw-bold text-primary">{{ $surat->nomor_surat }}</span>
-                                <br>
-                                <span class="text-muted small text-wrap d-block mt-1" style="line-height: 1.2;">
-                                    {{ Str::limit($surat->perihal, 60) }}
-                                </span>
-                            </td>
+                        {{-- NO SURAT & PERIHAL --}}
+<td>
+    <span class="fw-bold text-primary">{{ $surat->nomor_surat }}</span>
+    
+    {{-- Tambahan Indikator Status --}}
+    @if($surat->status == 'Draft')
+        <span class="badge bg-secondary small ms-1" style="font-size: 10px;">Draft</span>
+    @elseif($surat->status == 'Menunggu Validasi')
+        <span class="badge bg-warning text-dark small ms-1" style="font-size: 10px;">Proses Validasi</span>
+    @elseif($surat->status == 'Terkirim')
+        <span class="badge bg-success small ms-1" style="font-size: 10px;">Final</span>
+    @endif
+
+    <br>
+    <span class="text-muted small text-wrap d-block mt-1" style="line-height: 1.2;">
+        {{ Str::limit($surat->perihal, 60) }}
+    </span>
+</td>
 
                             {{-- TANGGAL --}}
                             <td>
@@ -145,38 +155,56 @@
                                 </div>
                             </td>
 
-                            {{-- FILE --}}
-                            <td class="text-center">
-                                @if($surat->file_surat)
-                                    <button type="button" class="btn btn-outline-primary btn-sm btn-icon" 
-                                            title="Lihat File"
-                                            data-bs-toggle="modal" 
-                                            data-bs-target="#filePreviewModal"
-                                            data-title="{{ $surat->perihal }}"
-                                            data-file="{{ asset('storage/' . $surat->file_surat) }}">
-                                        <i class="bi bi-file-earmark-pdf-fill"></i>
-                                    </button>
-                                @else
-                                    <span class="text-muted small">-</span>
-                                @endif
-                            </td>
+                           {{-- FILE --}}
+<td class="text-center">
+    @if($surat->file_surat)
+        @php
+            $isFinal = ($surat->status == 'Terkirim');
+            $btnClass = $isFinal ? 'btn-outline-primary' : 'btn-outline-secondary';
+            $iconClass = $isFinal ? 'bi-file-earmark-check-fill' : 'bi-file-earmark-medical';
+            $titleTip = $isFinal ? 'Lihat Surat Sah (Final)' : 'Lihat Draf Surat (Belum Sah)';
+        @endphp
+        
+        <button type="button" class="btn {{ $btnClass }} btn-sm btn-icon" 
+                title="{{ $titleTip }}"
+                data-bs-toggle="modal" 
+                data-bs-target="#filePreviewModal"
+                data-title="{{ $surat->perihal }} {{ !$isFinal ? '(DRAF)' : '' }}"
+                data-file="{{ asset('storage/' . $surat->file_surat) }}">
+            <i class="bi {{ $iconClass }}"></i>
+        </button>
+        
+        @if(!$isFinal)
+            <div class="text-muted" style="font-size: 9px; margin-top: 2px;">Belum Sah</div>
+        @endif
+    @else
+        <span class="text-muted small">-</span>
+    @endif
+</td>
 
-                           {{-- AKSI --}}
+      {{-- AKSI --}}
 <td class="text-center">
     <div class="d-flex justify-content-center gap-2">
-        {{-- 1. TOMBOL EDIT: Hanya muncul jika belum dikunci/diproses --}}
-        {{-- Jika Anda tidak menggunakan variabel $isLocked di sini, Anda bisa menghapus @if nya --}}
-        @if(!($isLocked ?? false))
+        {{-- TOMBOL EDIT --}}
+        @if($surat->status == 'Draft')
             <a href="{{ route('satker.surat-keluar.eksternal.edit', $surat->id) }}" class="btn btn-sm btn-action btn-action-edit" title="Edit Data" style="color:white">
                 <i class="bi bi-pencil-fill small"></i>
             </a>
         @else
-            <button class="btn btn-sm btn-secondary shadow-sm" disabled title="Surat sudah diproses, tidak bisa diedit">
+            {{-- Tombol Edit Mati jika sudah proses/final --}}
+            <button class="btn btn-sm btn-action btn-secondary" disabled title="Sudah diproses, tidak bisa diedit">
                 <i class="bi bi-lock-fill small"></i>
             </button>
         @endif
 
-        {{-- 2. TOMBOL HAPUS: Selalu muncul agar admin bisa membersihkan arsip --}}
+        {{-- TOMBOL LANJUTKAN BARCODE (Hanya jika masih Draft) --}}
+        @if($surat->status == 'Draft')
+            <a href="{{ route('satker.surat-keluar.eksternal.bubuhkan-ttd', $surat->id) }}" class="btn btn-sm btn-action btn-info" title="Bubuhkan TTD & Kirim" style="color:white; background: linear-gradient(135deg, #0dcaf0, #0aa2bd);">
+                <i class="bi bi-qr-code small"></i>
+            </a>
+        @endif
+
+        {{-- TOMBOL HAPUS --}}
         <form action="{{ route('satker.surat-keluar.eksternal.destroy', $surat->id) }}" method="POST" class="d-inline" onsubmit="return confirm('Apakah Anda yakin ingin menghapus surat ini?');">
             @csrf @method('DELETE')
             <button type="submit" class="btn btn-sm btn-action btn-action-delete" title="Hapus Data" style="color:white">

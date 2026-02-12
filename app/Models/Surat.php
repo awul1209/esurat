@@ -85,4 +85,9 @@ public function klasifikasis()
     // Parameter 2: nama tabel pivot yg tadi dibuat
     return $this->belongsToMany(Klasifikasi::class, 'klasifikasi_surat');
 }
+// Di Model Surat.php
+public function penerima()
+{
+    return $this->belongsTo(User::class, 'tujuan_user_id');
+}
 }

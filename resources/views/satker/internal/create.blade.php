@@ -4,13 +4,32 @@
 <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" />
 <style>
-    .form-label { font-weight: 600; font-size: 0.9rem; color: #495057; }
+    .form-label { font-weight: 600; font-size: 0.85rem; color: #495057; }
     .card-header { background: linear-gradient(45deg, #f8f9fa, #e9ecef); }
     #preview-container { display: none; margin-top: 10px; border: 1px dashed #ced4da; padding: 10px; border-radius: 5px; text-align: center; }
-    #preview-image { max-width: 50%; max-height: 150px; object-fit: contain; }
-    #preview-text { font-size: 0.9rem; color: #6c757d; }
-    /* Style tambahan untuk area pegawai */
-    .area-pegawai { display: none; background-color: #f8f9fa; border-radius: 8px; padding: 15px; border-left: 4px solid #0d6efd; }
+    
+    .tujuan-row { 
+        background-color: #f8f9fa; 
+        border: 1px solid #dee2e6; 
+        border-radius: 8px; 
+        padding: 15px; 
+        position: relative;
+    }
+    .btn-remove-row { position: absolute; top: -10px; right: -10px; border-radius: 50%; width: 25px; height: 25px; padding: 0; line-height: 25px; }
+
+    .method-box {
+        border: 2px solid #e9ecef;
+        border-radius: 10px;
+        padding: 15px;
+        transition: all 0.3s ease;
+        cursor: pointer;
+        height: 100%;
+        position: relative;
+    }
+    .method-input:checked + .method-box { border-color: #0d6efd; background-color: #e7f1ff; }
+    .method-input { position: absolute; opacity: 0; }
+    
+    .badge-optional { background-color: #e9ecef; color: #6c757d; font-weight: normal; }
 </style>
 @endpush
 
@@ -19,112 +38,153 @@
     <div class="row justify-content-center">
         <div class="col-lg-12">
             <div class="card shadow border-0 rounded-3">
-                <div class="card-header py-3 border-bottom d-flex align-items-center">
-                    <i class="bi bi-send-check-fill text-primary me-2 fs-5"></i>
-                    <h6 class="m-0 fw-bold text-primary">Buat Surat Keluar Internal</h6>
+                <div class="card-header py-3 d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center">
+                        <i class="bi bi-send-check-fill text-primary me-2 fs-5"></i>
+                        <h6 class="m-0 fw-bold text-primary">Buat Surat Keluar Internal (PDF)</h6>
+                    </div>
                 </div>
                 
                 <div class="card-body p-4">
-                    @if ($errors->any())
-                        <div class="alert alert-danger alert-dismissible fade show mb-4" role="alert">
-                            <i class="bi bi-exclamation-triangle-fill me-2"></i> Terdapat kesalahan pada inputan Anda.
-                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                        </div>
-                    @endif
-
                     <form action="{{ route('satker.surat-keluar.internal.store') }}" method="POST" enctype="multipart/form-data">
                         @csrf
-                        
-                        {{-- Baris 1: No Surat & Tanggal --}}
-                        <div class="row g-3 mb-3">
-                            <div class="col-md-8">
+
+                        {{-- Data Surat --}}
+                        <div class="row g-3 mb-4">
+                            <div class="col-md-3">
                                 <label class="form-label">Nomor Surat <span class="text-danger">*</span></label>
-                                <div class="input-group">
-                                    <span class="input-group-text bg-light"><i class="bi bi-123"></i></span>
-                                    <input type="text" name="nomor_surat" 
-                                           class="form-control @error('nomor_surat') is-invalid @enderror" 
-                                           value="{{ old('nomor_surat') }}" required placeholder="Contoh: 001/SATKER/2025">
-                                    @error('nomor_surat') 
-                                        <div class="invalid-feedback">{{ $message }}</div> 
-                                    @enderror
-                                </div>
+                                <input type="text" name="nomor_surat" class="form-control" required placeholder="001/...">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Tanggal Surat <span class="text-danger">*</span></label>
+                                <input type="date" name="tanggal_surat" class="form-control" value="{{ date('Y-m-d') }}" required>
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label">Sifat Surat <span class="text-danger">*</span></label>
+                                <select name="sifat" class="form-select" required>
+                                    <option value="Biasa">Biasa</option>
+                                    <option value="Penting">Penting</option>
+                                    <option value="Rahasia">Rahasia</option>
+                                    <option value="Segera">Segera</option>
+                                </select>
                             </div>
                             <div class="col-md-4">
-                                <label class="form-label">Tanggal Surat <span class="text-danger">*</span></label>
-                                <input type="date" name="tanggal_surat" 
-                                        class="form-control @error('tanggal_surat') is-invalid @enderror" 
-                                        value="{{ old('tanggal_surat', date('Y-m-d')) }}" required>
-                                @error('tanggal_surat') <div class="invalid-feedback">{{ $message }}</div> @enderror
+                                <label class="form-label">Perihal <span class="text-danger">*</span></label>
+                                <input type="text" name="perihal" class="form-control" required placeholder="Hal surat...">
                             </div>
                         </div>
 
-                        {{-- Baris 2: Tujuan Utama --}}
-                        <div class="row g-3 mb-3">
+                        {{-- BARIS BARU: Password Keamanan --}}
+                        <div class="row g-3 mb-4">
                             <div class="col-md-6">
-                                <label class="form-label">Tujuan Surat <span class="text-danger">*</span></label>
-                                <select name="tujuan_satker_ids[]" id="tujuan_utama" class="form-select select2 @error('tujuan_satker_ids') is-invalid @enderror" multiple="multiple" required>
-                                    <optgroup label="Instansi & Pimpinan">
-                                        <option value="universitas" {{ (collect(old('tujuan_satker_ids'))->contains('universitas')) ? 'selected' : '' }}>Rektor / Universitas</option>
-                                        <option value="pegawai_spesifik" {{ (collect(old('tujuan_satker_ids'))->contains('pegawai_spesifik')) ? 'selected' : '' }}>-- Pegawai Spesifik --</option>
-                                    </optgroup>
+                                <label class="form-label text-danger"><i class="bi bi-key-fill me-1"></i> Password Keamanan Surat (Min. 6 Karakter) <span class="text-danger">*</span></label>
+                                <input type="text" name="password" class="form-control @error('password') is-invalid @enderror" placeholder="Masukkan password unik (huruf/angka/simbol)" minlength="6">
+                                <small class="text-muted">Password ini akan digunakan saat mendaftarkan keabsahan ke sistem kampus.</small>
+                                @error('password') <div class="invalid-feedback">{{ $message }}</div> @enderror
+                            </div>
+                        </div>
 
-                                    <optgroup label="Satuan Kerja (Langsung)">
-                                        @foreach($daftarSatker as $satker)
-                                            <option value="{{ $satker->id }}" {{ (collect(old('tujuan_satker_ids'))->contains($satker->id)) ? 'selected' : '' }}>
-                                                {{ $satker->nama_satker }}
-                                            </option>
+                        <hr>
+
+                        {{-- Area Tujuan Berjenjang --}}
+                        <div class="mb-3 d-flex justify-content-between align-items-center">
+                            <h6 class="fw-bold text-secondary m-0">Daftar Tujuan Surat</h6>
+                            <button type="button" class="btn btn-sm btn-outline-primary" id="add-tujuan">
+                                <i class="bi bi-plus-circle me-1"></i> Tambah Unit Tujuan
+                            </button>
+                        </div>
+
+                        <div id="wrapper-tujuan">
+                            <div class="tujuan-row mb-3 shadow-sm">
+                                <div class="row g-3">
+                                    <div class="col-md-4">
+                                        <label class="form-label text-primary">1. Pilih Fakultas / Unit</label>
+                                        <select class="form-select select-satker-dynamic" required>
+                                            <option value="">-- Pilih Satker --</option>
+                                            <option value="rektor">Rektorat / Universitas</option>
+                                            @foreach($daftarSatker as $satker)
+                                                <option value="{{ $satker->id }}">{{ $satker->nama_satker }}</option>
+                                            @endforeach
+                                        </select>
+                                    </div>
+                                    <div class="col-md-8">
+                                        <label class="form-label text-primary">2. Pilih Pejabat / Pegawai Penerima</label>
+                                        <select name="tujuan_user_ids[]" class="form-select select-user-dynamic" multiple="multiple" required></select>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <hr class="my-4">
+                        <h6 class="fw-bold mb-3 text-secondary"><i class="bi bi-diagram-3-fill me-2"></i>Alur Validasi & Tembusan <span class="badge badge-optional ms-1">Opsional</span></h6>
+
+                        <div class="row g-3 mb-4">
+                            <div class="col-md-6">
+                                <label class="form-label text-primary">Mengetahui / Validasi</label>
+                                <select name="pimpinan_ids[]" id="select-pimpinan" class="form-select" multiple="multiple">
+                                    @foreach($pimpinans as $p)
+                                        <option value="{{ $p->id }}">{{ $p->name }} ({{ $p->jabatan->nama_jabatan }})</option>
+                                    @endforeach
+                                </select>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="form-label text-info">Tembusan Tambahan</label>
+                                <select name="tembusan_ids[]" id="select-tembusan" class="form-select" multiple="multiple">
+                                    <optgroup label="Pimpinan / Pejabat">
+                                        @foreach($pimpinans as $p)
+                                            <option value="user_{{ $p->id }}">{{ $p->name }} ({{ $p->jabatan->nama_jabatan }})</option>
+                                        @endforeach
+                                    </optgroup>
+                                    <optgroup label="Unit / Satuan Kerja">
+                                        @foreach($satkers as $s)
+                                            @if($s->nama_satker != 'Biro Administrasi Umum (BAU)') 
+                                                <option value="satker_{{ $s->id }}">{{ $s->nama_satker }}</option>
+                                            @endif
                                         @endforeach
                                     </optgroup>
                                 </select>
-                                <div class="form-text text-muted small">Pilih Rektor, Satker, atau Pegawai Spesifik.</div>
-                            </div>
-
-                            <div class="col-md-6">
-                                <label class="form-label">Perihal / Hal <span class="text-danger">*</span></label>
-                                <textarea name="perihal" class="form-control @error('perihal') is-invalid @enderror" rows="1" style="height: 40px;" required placeholder="Isi perihal surat...">{{ old('perihal') }}</textarea>
-                                @error('perihal') <div class="invalid-feedback">{{ $message }}</div> @enderror
                             </div>
                         </div>
 
-                        {{-- Baris 3: Area Pilih Pegawai (Muncul jika pilih Pegawai Spesifik) --}}
-                        <div class="area-pegawai mb-3" id="areaPegawai">
+                        <hr class="my-4">
+
+                        {{-- Metode TTD --}}
+                        <div class="mb-4">
+                            <label class="form-label d-block mb-3">Metode Pengesahan <span class="text-danger">*</span></label>
                             <div class="row g-3">
                                 <div class="col-md-6">
-                                    <label class="form-label text-primary">1. Pilih Satker Pegawai</label>
-                                    <select id="select_satker_pegawai" class="form-select select2-single">
-                                        <option value="">-- Pilih Satker Dahulu --</option>
-                                        @foreach($daftarSatker as $satker)
-                                            <option value="{{ $satker->id }}">{{ $satker->nama_satker }}</option>
-                                        @endforeach
-                                    </select>
+                                    <input type="radio" name="metode_ttd" id="method_qr" value="qr_png" class="method-input" checked>
+                                    <label for="method_qr" class="method-box d-block text-center">
+                                        <i class="bi bi-qr-code-scan fs-3 text-primary"></i>
+                                        <span class="fw-bold d-block mt-2">Tanda Tangan Digital</span>
+                                        <small class="text-muted">Arahkan ke Editor Layout setelah Simpan.</small>
+                                    </label>
                                 </div>
                                 <div class="col-md-6">
-                                    <label class="form-label text-primary">2. Pilih Nama Pegawai</label>
-                                    <select name="tujuan_user_ids[]" id="select_user_tujuan" class="form-select select2-pegawai" multiple="multiple">
-                                        {{-- Akan diisi via AJAX --}}
-                                    </select>
-                                    <div class="form-text small text-danger">*Anda bisa memilih lebih dari satu pegawai.</div>
+                                    <input type="radio" name="metode_ttd" id="method_manual" value="manual" class="method-input">
+                                    <label for="method_manual" class="method-box d-block text-center">
+                                        <i class="bi bi-pen-fill fs-3 text-primary"></i>
+                                        <span class="fw-bold d-block mt-2">Sudah Ada TTD Basah</span>
+                                        <small class="text-muted">Langsung Kirim (Wajib PDF).</small>
+                                    </label>
                                 </div>
                             </div>
                         </div>
 
-                        {{-- Baris 4: File Upload --}}
+                        {{-- File --}}
                         <div class="mb-4">
-                            <label class="form-label">Upload File Surat <span class="text-danger">*</span></label>
-                            <input type="file" name="file_surat" id="fileInput" class="form-control @error('file_surat') is-invalid @enderror" accept=".pdf,.jpg,.jpeg,.png" required onchange="previewFile()">
+                            <label class="form-label" id="labelFile">Upload Draf Surat (Hanya PDF) <span class="text-danger">*</span></label>
+                            <input type="file" name="file_surat" id="fileInput" class="form-control" accept=".pdf" required onchange="previewFile()">
                             <div id="preview-container">
-                                <p id="preview-text" class="mb-0">Preview akan muncul di sini</p>
-                                <img id="preview-image" src="#" alt="Preview Gambar" style="display: none;">
-                                <iframe id="preview-pdf" src="" width="50%" height="250px" style="display: none; border: none;"></iframe>
+                                <iframe id="preview-pdf" src="" width="100%" height="400px" style="display: none; border: 1px solid #ddd;"></iframe>
                             </div>
                         </div>
 
-                        <div class="d-flex justify-content-between pt-3 border-top">
-                            <a href="{{ route('satker.surat-keluar.internal') }}" class="btn btn-outline-secondary px-4">
-                                <i class="bi bi-arrow-left me-1"></i> Batal
-                            </a>
-                            <button type="submit" class="btn btn-primary px-4 shadow-sm">
-                                <i class="bi bi-send-fill me-1"></i> Kirim Surat
+                        <div class="d-flex justify-content-between mt-4">
+                            <a href="{{ route('satker.surat-keluar.internal') }}" class="btn btn-light px-4">Batal</a>
+                            <button type="submit" id="btnSubmit" class="btn btn-primary px-5">
+                                <i class="bi bi-layout-text-window-reverse me-1"></i> <span>Lanjutkan ke Editor Barcode</span>
                             </button>
                         </div>
                     </form>
@@ -140,105 +200,76 @@
 <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 <script>
     $(document).ready(function() {
-        // 1. Init Select2 Utama (Tujuan Satker/Universitas)
-        // Gunakan ID agar tidak bentrok dengan inisialisasi class global
-        $('#tujuan_utama').select2({ 
-            theme: 'bootstrap-5', 
-            placeholder: 'Pilih Tujuan...', 
-            width: '100%',
-            allowClear: true 
+        function initSelect2(element) {
+            $(element).select2({ theme: 'bootstrap-5', width: '100%', placeholder: 'Pilih...' });
+        }
+
+        initSelect2('.select-satker-dynamic');
+        initSelect2('.select-user-dynamic');
+        initSelect2('#select-pimpinan');
+        initSelect2('#select-tembusan');
+
+        $('#add-tujuan').on('click', function() {
+            let newRow = `
+            <div class="tujuan-row mb-3 shadow-sm">
+                <button type="button" class="btn btn-danger btn-sm btn-remove-row"><i class="bi bi-x"></i></button>
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label text-primary">1. Pilih Fakultas / Unit</label>
+                        <select class="form-select select-satker-dynamic" required>
+                            <option value="">-- Pilih Satker --</option>
+                            <option value="rektor">Rektorat / Universitas</option>
+                            @foreach($daftarSatker as $satker)
+                                <option value="{{ $satker->id }}">{{ $satker->nama_satker }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div class="col-md-8">
+                        <label class="form-label text-primary">2. Pilih Nama Penerima (User)</label>
+                        <select name="tujuan_user_ids[]" class="form-select select-user-dynamic" multiple="multiple" required></select>
+                    </div>
+                </div>
+            </div>`;
+            $('#wrapper-tujuan').append(newRow);
+            initSelect2($('#wrapper-tujuan .tujuan-row:last-child .select-satker-dynamic'));
+            initSelect2($('#wrapper-tujuan .tujuan-row:last-child .select-user-dynamic'));
         });
 
-        // 2. Init Select2 untuk Satker Pegawai (Pilihan Tunggal)
-        $('#select_satker_pegawai').select2({ 
-            theme: 'bootstrap-5', 
-            placeholder: '-- Pilih Satker Dahulu --',
-            width: '100%',
-            allowClear: true 
+        $(document).on('click', '.btn-remove-row', function() {
+            $(this).closest('.tujuan-row').remove();
         });
 
-        // 3. Init Select2 untuk Daftar Nama Pegawai (Pilihan Ganda)
-        $('#select_user_tujuan').select2({ 
-            theme: 'bootstrap-5', 
-            placeholder: 'Cari Nama Pegawai...', 
-            width: '100%',
-            allowClear: true 
-        });
+        $(document).on('change', '.select-satker-dynamic', function() {
+            const satkerId = $(this).val();
+            const row = $(this).closest('.tujuan-row');
+            const userSelect = row.find('.select-user-dynamic');
 
-        // --- Logika Munculkan Area Pegawai ---
-        $('#tujuan_utama').on('change', function() {
-            const values = $(this).val() || [];
-            if (values.includes('pegawai_spesifik')) {
-                $('#areaPegawai').slideDown();
-            } else {
-                $('#areaPegawai').slideUp();
-                // Reset pilihan pegawai jika area disembunyikan
-                $('#select_user_tujuan').val(null).trigger('change'); 
-                $('#select_satker_pegawai').val(null).trigger('change');
+            if (satkerId) {
+                userSelect.empty().append('<option value="">Loading...</option>');
+                $.get("{{ route('api.get-pegawai-by-satker') }}", { satker_id: satkerId }, function(data) {
+                    userSelect.empty();
+                    data.forEach(u => userSelect.append(`<option value="${u.id}">${u.name}</option>`));
+                    userSelect.trigger('change');
+                });
             }
         });
 
-        // --- AJAX: Pilih Satker -> Ambil Pegawai ---
-        $('#select_satker_pegawai').on('change', function() {
-            const satkerId = $(this).val();
-            const userSelect = $('#select_user_tujuan');
-            
-            // Tampilkan status loading di dropdown pegawai
-            userSelect.empty().append('<option value="">Loading...</option>');
-
-            if (satkerId) {
-                $.ajax({
-                    url: "{{ route('api.get-pegawai-by-satker') }}", 
-                    type: "GET",
-                    data: { satker_id: satkerId },
-                    success: function(data) {
-                        userSelect.empty(); // Bersihkan "Loading..."
-                        if(data.length > 0) {
-                            $.each(data, function(key, user) {
-                                userSelect.append('<option value="'+ user.id +'">'+ user.name +'</option>');
-                            });
-                        } else {
-                            userSelect.append('<option value="">Tidak ada pegawai ditemukan</option>');
-                        }
-                        // Refresh Select2 setelah data berubah
-                        userSelect.trigger('change');
-                    },
-                    error: function() {
-                        alert('Gagal mengambil data pegawai.');
-                        userSelect.empty();
-                    }
-                });
+        $('input[name="metode_ttd"]').on('change', function() {
+            if ($(this).val() === 'manual') {
+                $('#btnSubmit span').text('Kirim Surat Sekarang');
+                $('#btnSubmit i').attr('class', 'bi bi-send-fill me-1');
             } else {
-                userSelect.empty();
-                userSelect.trigger('change');
+                $('#btnSubmit span').text('Lanjutkan ke Editor Barcode');
+                $('#btnSubmit i').attr('class', 'bi bi-layout-text-window-reverse me-1');
             }
         });
     });
 
-    // Fungsi Preview File (Tetap Sama)
     function previewFile() {
-        const fileInput = document.getElementById('fileInput');
-        const previewContainer = document.getElementById('preview-container');
-        const previewImage = document.getElementById('preview-image');
-        const previewPdf = document.getElementById('preview-pdf');
-        const previewText = document.getElementById('preview-text');
-        const file = fileInput.files[0];
-
-        if (file) {
-            const fileType = file.type;
-            const fileURL = URL.createObjectURL(file);
-            previewContainer.style.display = 'block';
-            previewText.style.display = 'none';
-
-            if (fileType.match('image.*')) {
-                previewImage.src = fileURL;
-                previewImage.style.display = 'inline-block';
-                previewPdf.style.display = 'none';
-            } else if (fileType === 'application/pdf') {
-                previewPdf.src = fileURL;
-                previewPdf.style.display = 'block';
-                previewImage.style.display = 'none';
-            }
+        const file = document.getElementById('fileInput').files[0];
+        if (file && file.type === 'application/pdf') {
+            $('#preview-pdf').attr('src', URL.createObjectURL(file)).show();
+            $('#preview-container').show();
         }
     }
 </script>

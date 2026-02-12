@@ -12,21 +12,23 @@ class RoleMiddleware
     /**
      * Handle an incoming request.
      */
-    public function handle(Request $request, Closure $next, $role): Response
+public function handle(Request $request, Closure $next, ...$roles): Response
     {
         // 1. Cek apakah user sudah login
         if (!Auth::check()) {
             return redirect('/login');
         }
 
-        // 2. Ambil user yang sedang login
         $user = Auth::user();
 
-        // 3. Cek apakah role user sesuai dengan yang diminta route
-        // Contoh pemanggilan: middleware('role:bau') -> $role = 'bau'
-        // Kita gunakan explode agar bisa support banyak role jika perlu (misal: 'role:admin,bau')
-        $roles = explode(',', $role);
+        // 2. PROTEKSI STATUS AKTIF:
+        // Jika user tidak aktif, paksa logout dan arahkan kembali ke login
+        if (!$user->is_active) {
+            Auth::logout();
+            return redirect('/login')->with('error', 'Akun Anda sudah dinonaktifkan. Silakan hubungi Admin BAU.');
+        }
 
+        // 3. Cek apakah role user sesuai dengan daftar yang diminta route
         if (in_array($user->role, $roles)) {
             return $next($request); // Lanjut, akses diizinkan
         }

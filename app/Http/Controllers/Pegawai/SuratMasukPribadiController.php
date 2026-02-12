@@ -18,7 +18,6 @@ public function indexPribadiIntEks(Request $request)
     $to = $request->to;
     $tipe = $request->tipe;
 
-    // 1. Query Dasar Tabel Surat (Eksternal/Univ)
     $querySurat = \App\Models\Surat::query()
         ->where(function($mainQuery) use ($user) {
             $mainQuery->whereHas('riwayats', function($q) use ($user) {
@@ -28,14 +27,13 @@ public function indexPribadiIntEks(Request $request)
             ->orWhere('tujuan_user_id', $user->id);
         });
 
-    // 2. Query Dasar Tabel SuratKeluar (Internal Satker)
     $queryDelegasi = \App\Models\SuratKeluar::query()
+       ->whereIn('status', ['Terkirim', 'Selesai'])
         ->whereHas('riwayats', function($q) use ($user) {
             $q->where('penerima_id', $user->id)
               ->where('status_aksi', 'NOT LIKE', '%Informasi%');
         });
 
-    // --- LOGIKA FILTER TANGGAL ---
     if ($from && $to) {
         $querySurat->whereBetween('tanggal_surat', [$from, $to]);
         $queryDelegasi->whereBetween('tanggal_surat', [$from, $to]);
@@ -49,40 +47,58 @@ public function indexPribadiIntEks(Request $request)
         $q->where('penerima_id', $user->id)->latest();
     }])->get();
 
-    // 3. Gabungkan dan Transformasi Data
-    $suratUntukSaya = $dataSurat->concat($dataDelegasi)->map(function($item) use ($user) {
-        $log = $item->riwayats->where('penerima_id', $user->id)->first();
+    $suratUntukSaya = $dataDelegasi->concat($dataSurat)->map(function($item) use ($user) {
+        $log = $item->riwayats->where('penerima_id', (int)$user->id)->first();
         
-        // Tentukan Tipe Label
         $item->tipe_label = ($item instanceof \App\Models\Surat) ? ucfirst($item->tipe_surat) : 'Internal';
         $item->surat_dari_display = ($item instanceof \App\Models\Surat) ? $item->surat_dari : ($item->user->satker->nama_satker ?? 'Rektorat');
         
-        $item->riwayat_id = $log ? $log->id : null;
-        $item->status_penerimaan = $log ? $log->is_read : 0; 
-        $item->tgl_display = $log ? $log->created_at : $item->tanggal_surat;
+        $item->riwayat_id_fix = $log ? $log->id : null;
+        $item->status_aksi_fix = $log ? $log->status_aksi : 'Riwayat Tidak Ditemukan';
+        $item->is_read_fix = $log ? $log->is_read : 0;
+        $item->tgl_tampil = $log ? $log->created_at : $item->tanggal_surat;
 
-        // Logika Tombol Action
+        // --- PERBAIKAN LOGIKA STATUS AKSI ---
         $item->is_perlu_terima = false;
-        if ($item->tujuan_user_id == $user->id || ($log && stripos($log->status_aksi, 'Personal') !== false)) {
+
+        if ($log) {
+            $status = $log->status_aksi;
+            // Deteksi jika status mengandung kata kunci surat masuk langsung atau tanda tangan digital selesai
+            if (stripos($status, 'Surat Masuk Langsung') !== false || 
+                stripos($status, 'Selesai (Ditandatangani Digital)') !== false) {
+                $item->is_perlu_terima = true;
+            }
+        } 
+        
+        if ($item instanceof \App\Models\Surat && $item->tujuan_user_id == $user->id) {
             $item->is_perlu_terima = true;
         }
 
         return $item;
     });
 
-    // --- LOGIKA FILTER TIPE SURAT ---
-    if ($tipe) {
-        $suratUntukSaya = $suratUntukSaya->filter(function($item) use ($tipe) {
-            // strtolower agar filter 'internal' cocok dengan 'Internal'
-            return strtolower($item->tipe_label) == strtolower($tipe);
-        });
-    }
+    $suratUntukSaya = $suratUntukSaya->unique('nomor_surat')->sortByDesc('tgl_tampil')->values();
 
-    // Urutkan dan Hilangkan Duplikat
-    $suratUntukSaya = $suratUntukSaya->unique('nomor_surat')->sortByDesc('tgl_display');
+    if ($tipe) {
+        $suratUntukSaya = $suratUntukSaya->filter(fn($item) => strtolower($item->tipe_label) == strtolower($tipe));
+    }
 
     return view('pegawai.surat_masuk_pribadi', compact('suratUntukSaya'));
 }
+    // TEMPEL KODE DD INI UNTUK DEBUG
+    // dd([
+    //     'user_id_login' => $user->id,
+    //     'jumlah_data' => $suratUntukSaya->count(),
+    //     'sampel_data_pertama' => $suratUntukSaya->first() ? [
+    //         'id_surat' => $suratUntukSaya->first()->id,
+    //         'nomor_surat' => $suratUntukSaya->first()->nomor_surat,
+    //         'tipe_objek' => get_class($suratUntukSaya->first()),
+    //         'isi_riwayats_relasi' => $suratUntukSaya->first()->riwayats, // Cek relasi Eloquent
+    //         'id_konfirmasi_tempel' => $suratUntukSaya->first()->id_riwayat_fix ?? 'Belum ada',
+    //         'is_perlu_terima' => $suratUntukSaya->first()->is_perlu_terima ?? 'Belum ada',
+    //     ] : 'Data Kosong'
+    // ]);
+
 
 public function exportExcel(Request $request)
 {
@@ -91,8 +107,7 @@ public function exportExcel(Request $request)
     $to = $request->to;
     $tipe = $request->tipe;
 
-    // --- 1. Query Jalur Eksternal/Univ (surats) ---
-    // Mencari yang ditujukan ke saya dan BUKAN surat umum (Informasi)
+    // 1. Query Jalur Eksternal
     $qEks = \App\Models\Surat::query()->where(function($mainQuery) use ($user) {
         $mainQuery->whereHas('riwayats', function($q) use ($user) {
             $q->where('penerima_id', $user->id)
@@ -101,20 +116,20 @@ public function exportExcel(Request $request)
         ->orWhere('tujuan_user_id', $user->id);
     });
 
-    // --- 2. Query Jalur Internal Satker (surat_keluars) ---
-    // Mencari hasil delegasi/disposisi ke saya dan BUKAN surat umum
-    $qInt = \App\Models\SuratKeluar::query()->whereHas('riwayats', function($q) use ($user) {
-        $q->where('penerima_id', $user->id)
-          ->where('status_aksi', 'NOT LIKE', '%Informasi%');
-    });
+    // 2. Query Jalur Internal (Hanya yang sudah Terkirim/Final)
+    $qInt = \App\Models\SuratKeluar::query()
+        ->where('status', 'Terkirim')
+        ->whereHas('riwayats', function($q) use ($user) {
+            $q->where('penerima_id', $user->id)
+              ->where('status_aksi', 'NOT LIKE', '%Informasi%');
+        });
 
-    // --- 3. Filter Tanggal (Diterapkan di Query Database) ---
+    // 3. Filter Tanggal (Wajib diterapkan di kedua query)
     if ($from && $to) {
         $qEks->whereBetween('tanggal_surat', [$from, $to]);
         $qInt->whereBetween('tanggal_surat', [$from, $to]);
     }
 
-    // --- 4. Transformasi Data ---
     $dataEks = $qEks->get()->map(fn($s) => [
         'tipe' => ucfirst($s->tipe_surat), 
         'asal' => $s->surat_dari, 
@@ -131,41 +146,25 @@ public function exportExcel(Request $request)
         'tanggal' => \Carbon\Carbon::parse($s->tanggal_surat)->format('d-m-Y')
     ]);
 
-    // Gabungkan data
     $data = $dataEks->concat($dataInt)->unique('nomor');
 
-    // --- 5. Filter Tipe (Diterapkan pada Collection) ---
     if($tipe) {
-        $data = $data->filter(function($item) use ($tipe) {
-            return strtolower($item['tipe']) == strtolower($tipe);
-        });
+        $data = $data->filter(fn($item) => strtolower($item['tipe']) == strtolower($tipe));
     }
 
-    // --- 6. Proses Download CSV ---
+    // 6. Proses Download CSV
     $fileName = 'Laporan_Surat_Pribadi_' . now()->format('Ymd') . '.csv';
     $headers = [ 
         "Content-type" => "text/csv", 
         "Content-Disposition" => "attachment; filename=$fileName",
-        "Pragma" => "no-cache",
-        "Cache-Control" => "must-revalidate, post-check=0, pre-check=0",
-        "Expires" => "0"
     ];
 
     $callback = function() use($data) {
         $file = fopen('php://output', 'w');
-        // Tambahkan BOM untuk mendukung karakter khusus di Excel Windows
-        fprintf($file, chr(0xEF).chr(0xBB).chr(0xBF));
-        
+        fprintf($file, chr(0xEF).chr(0xBB).chr(0xBF)); // BOM UTF-8
         fputcsv($file, ['Tipe Surat', 'Asal Surat', 'Nomor Surat', 'Perihal', 'Tanggal']);
-        
         foreach ($data as $row) { 
-            fputcsv($file, [
-                $row['tipe'], 
-                $row['asal'], 
-                $row['nomor'], 
-                $row['perihal'], 
-                $row['tanggal']
-            ]); 
+            fputcsv($file, [$row['tipe'], $row['asal'], $row['nomor'], $row['perihal'], $row['tanggal']]); 
         }
         fclose($file);
     };
@@ -180,13 +179,23 @@ public function terimaSuratLangsung($riwayatId)
     try {
         $riwayat = \App\Models\RiwayatSurat::findOrFail($riwayatId);
         
-        // Update kolom is_read di tabel riwayat_surats
+        // 1. Update riwayat (sebagai log aktivitas)
         $riwayat->update([
-            'is_read' => 2, // Selesai
-            'status_aksi' => 'Surat Diterima oleh Pegawai'
+            'is_read' => 2,
+            'status_aksi' => 'Surat Diterima oleh Pegawai: ' . auth()->user()->name
         ]);
 
-        return redirect()->back()->with('success', 'Surat berhasil diterima.');
+        // 2. UPDATE TABEL PIVOT (Kunci utama perbaikan status)
+        // Kita update baris yang sesuai dengan surat ini dan satker si penerima
+        \DB::table('surat_keluar_internal_penerima')
+            ->where('surat_keluar_id', $riwayat->surat_keluar_id)
+            ->where('satker_id', auth()->user()->satker_id)
+            ->update([
+                'is_read' => 2,
+                'updated_at' => now()
+            ]);
+
+        return redirect()->back()->with('success', 'Surat berhasil diterima dan status diperbarui.');
     } catch (\Exception $e) {
         return redirect()->back()->with('error', 'Gagal: ' . $e->getMessage());
     }

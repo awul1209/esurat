@@ -120,38 +120,92 @@
                             <th class="text-center" width="15%">Aksi</th>
                         </tr>
                     </thead>
-    <tbody>
+ <tbody>
 @foreach($suratKeluar as $surat)
-    @php
-        // 1. Setup Awal
-        $totalPenerima = $surat->penerimaInternal->count();
-        $isAntarSatker = $totalPenerima > 0;
-        
-        $tujuanTeks = strtolower(trim($surat->tujuan_surat));
-        $isKeRektorat = !empty($tujuanTeks) && 
-                        (str_contains($tujuanTeks, 'rektor') || 
-                         str_contains($tujuanTeks, 'univ'));
-        
-        // --- PENANGANAN PEGAWAI ---
-        $riwayatPegawai = $surat->riwayats->whereNotNull('penerima_id');
-        
-        // Kunci: Surat dianggap "Ke Pegawai" hanya jika tidak ada tujuan Satker (Direct ke Pegawai)
-        $isKePegawaiDirect = !$isAntarSatker && !$isKeRektorat && $riwayatPegawai->isNotEmpty();
-        
-        $isLocked = false;
-        $statusDisplay = 'Terkirim'; 
-        $badgeColor = 'warning'; 
+ @php
+    // --- 1. SETUP AWAL (TETAP) ---
+    $totalPenerimaSatkerRaw = $surat->penerimaInternal->count();
+    $tujuanTeks = strtolower(trim($surat->tujuan_surat));
+    $isKeRektorat = !empty($tujuanTeks) && 
+                    (str_contains($tujuanTeks, 'rektor') || 
+                     str_contains($tujuanTeks, 'univ'));
+    
+    $pimpinanIds = $surat->validasis->pluck('pimpinan_id')->toArray();
 
-        // --- LOGIKA STATUS ---
-        if ($isKeRektorat) {
+    // --- 2. FILTER TUJUAN ASLI (TETAP) ---
+    $riwayatPegawaiDirect = $surat->riwayats->filter(function($riwayat) use ($pimpinanIds, $surat) {
+        return !empty($riwayat->penerima_id) && 
+                !in_array($riwayat->penerima_id, $pimpinanIds) &&
+                $riwayat->user_id == $surat->user_id; 
+    });
+
+    $isKePegawaiDirect = $riwayatPegawaiDirect->isNotEmpty();
+
+    $satkerIdsDariPegawai = $riwayatPegawaiDirect->map(fn($rp) => $rp->penerima->satker_id ?? null)
+                            ->filter()->unique()->toArray();
+
+    $satkerTujuanMurni = $surat->penerimaInternal->filter(function($s) use ($satkerIdsDariPegawai) {
+        return !in_array($s->id, $satkerIdsDariPegawai);
+    });
+
+    $isAntarSatker = $satkerTujuanMurni->isNotEmpty();
+    
+    // --- 3. HITUNG TARGET & RESPON (PERBAIKAN DI SINI) ---
+    // Target tetap dihitung dari unik Pegawai + Satker Murni
+    $totalTargetSurat = $riwayatPegawaiDirect->count() + $satkerTujuanMurni->count();
+    
+    // PERBAIKAN: Gunakan $surat->penerimaInternal (koleksi lengkap) bukan $satkerTujuanMurni
+    // Agar jika Admin Satker mengarsipkan, statusnya tetap terhitung
+    $arsipSatker = $surat->penerimaInternal->where('pivot.is_read', 2)->count();
+    $arsipPegawai = $riwayatPegawaiDirect->where('is_read', 2)->count();
+    
+    $totalSudahRespon = $arsipSatker + $arsipPegawai;
+
+    // Hitung Dibaca (is_read = 1)
+    $dibacaSatker = $surat->penerimaInternal->where('pivot.is_read', 1)->count();
+    $dibacaPegawai = $riwayatPegawaiDirect->where('is_read', 1)->count();
+    $totalDibaca = $dibacaSatker + $dibacaPegawai + $totalSudahRespon;
+
+    // Default Status
+    $isLocked = false;
+    $statusDisplay = 'Terkirim'; 
+    $badgeColor = 'warning'; 
+
+    // --- 4. LOGIKA VALIDASI PIMPINAN (TETAP) ---
+    $totalValidasi = $surat->validasis->count();
+    $sudahValidasi = $surat->validasis->where('status', 'setuju')->count();
+    $adaRevisi = $surat->validasis->where('status', 'revisi')->count();
+    $isWaitingValidation = $totalValidasi > 0 && ($sudahValidasi < $totalValidasi) && ($adaRevisi == 0);
+
+    if ($adaRevisi > 0) {
+        $statusDisplay = "Minta Revisi"; $badgeColor = 'danger'; $isLocked = false; 
+    } elseif ($isWaitingValidation) {
+        $statusDisplay = "Menunggu Validasi ($sudahValidasi/$totalValidasi)"; $badgeColor = 'secondary';
+        $isLocked = ($sudahValidasi > 0); 
+    } else {
+        $isLocked = true;
+        
+        // --- 5. LOGIKA PENENTUAN STATUS AKHIR (PERBAIKAN DI SINI) ---
+        if ($isKePegawaiDirect || $totalPenerimaSatkerRaw > 0) {
+            if ($totalSudahRespon > 0) {
+                // Gunakan perbandingan total respon vs total target
+                $statusDisplay = ($totalSudahRespon >= $totalTargetSurat) ? 'Selesai' : 'Diterima Sebagian';
+                $badgeColor = ($totalSudahRespon >= $totalTargetSurat) ? 'success' : 'info';
+            } elseif ($totalDibaca > 0) {
+                $statusDisplay = 'Dibaca';
+                $badgeColor = 'info';
+            }
+        } 
+        
+        // Logika Sinkronisasi Rektorat (Tetap)
+        if ($isKeRektorat && $statusDisplay == 'Terkirim') {
             $linkedSurat = \App\Models\Surat::where('nomor_surat', trim($surat->nomor_surat))->latest()->first();
             if ($linkedSurat) {
                 $statusRemote = $linkedSurat->status;
-                $isLocked = true; 
-                if ($statusRemote == 'di_satker' || stripos($statusRemote, 'Disposisi') !== false) {
-                    $statusDisplay = 'Selesai (Didisposisi)'; $badgeColor = 'success';
+                if ($statusRemote == 'di_satker' || stripos($statusRemote, 'Disposisi') !== false || $statusRemote == 'selesai') {
+                    $statusDisplay = 'Selesai'; $badgeColor = 'success';
                 } elseif (stripos($statusRemote, 'Arsip') !== false || stripos($statusRemote, 'Selesai') !== false) {
-                    $statusDisplay = 'Selesai (Diarsipkan)'; $badgeColor = 'success';
+                    $statusDisplay = 'Selesai'; $badgeColor = 'success';
                 } elseif (stripos($statusRemote, 'di_admin_rektor') !== false) {
                     $statusDisplay = 'Di Admin Rektor'; $badgeColor = 'info';
                 } elseif (stripos($statusRemote, 'Diteruskan') !== false) {
@@ -160,70 +214,62 @@
             } else {
                 $statusDisplay = 'Diterima BAU'; $badgeColor = 'info';
             }
-        } elseif ($isAntarSatker) {
-            $jumlahArsip = $surat->penerimaInternal->where('pivot.is_read', 2)->count();
-            if ($jumlahArsip > 0) {
-                $isLocked = true;
-                $statusDisplay = ($jumlahArsip == $totalPenerima) ? 'Selesai' : 'Diterima Sebagian';
-                $badgeColor = ($jumlahArsip == $totalPenerima) ? 'success' : 'info';
-            }
-        } elseif ($isKePegawaiDirect) {
-            $totalPegawai = $riwayatPegawai->count();
-            $jumlahDiterima = $riwayatPegawai->where('is_read', 2)->count();
-            if ($jumlahDiterima > 0) {
-                $isLocked = true;
-                $statusDisplay = ($jumlahDiterima == $totalPegawai) ? 'Selesai' : 'Diterima Sebagian';
-                $badgeColor = ($jumlahDiterima == $totalPegawai) ? 'success' : 'info';
-            }
         }
-    @endphp
+    }
+@endphp
 
-    <tr>
-        <td class="text-center fw-bold">{{ $loop->iteration }}</td>
-        
-       {{-- KOLOM TUJUAN (PERBAIKAN) --}}
-<td>
-    <div class="d-flex flex-column gap-1">
-        {{-- 1. PRIORITAS UTAMA: JIKA KE ANTAR SATKER --}}
-        @if($isAntarSatker)
-            @foreach($surat->penerimaInternal as $penerima)
-                <span class="badge bg-light text-dark border text-start" style="width: fit-content; font-size: 11px;">
-                    <i class="bi bi-building me-1 text-success"></i> {{ $penerima->nama_satker }}
-                </span>
-            @endforeach
+<tr>
+    <td class="text-center fw-bold">{{ $loop->iteration }}</td>
+    
+    {{-- KOLOM TUJUAN --}}
+    <td>
+        <div class="d-flex flex-column gap-1">
+            {{-- 1. PEGAWAI TUJUAN LANGSUNG --}}
+            @if($isKePegawaiDirect)
+                @foreach($riwayatPegawaiDirect as $rp)
+                    @php $namaPegawai = $rp->penerima->name ?? 'User Tidak Ditemukan'; @endphp
+                    <div class="d-flex flex-column mb-1">
+                        <span class="badge bg-light text-dark border text-start" style="width: fit-content; font-size: 10px;">
+                            <i class="bi bi-person-fill me-1 text-primary"></i> {{ $namaPegawai }}
+                        </span>
+                    </div>
+                @endforeach
+            @endif
 
-        {{-- 2. PRIORITAS KEDUA: JIKA KE REKTORAT / BAU --}}
-        @elseif($isKeRektorat)
-            <div class="d-flex flex-column mb-1">
-                <span class="fw-bold text-dark">{{ $surat->tujuan_surat }}</span>
-                <span class="badge bg-light text-dark border text-start" style="width: fit-content; font-size: 10px;">
-                    <i class="bi bi-arrow-right-circle me-1 text-warning"></i> Via BAU
-                </span>
-            </div>
+            {{-- 2. SATKER TUJUAN (Hanya muncul jika bukan Satker dari pegawai di atas) --}}
+            @if($isAntarSatker)
+                @foreach($satkerTujuanMurni as $penerima)
+                    <span class="badge bg-light text-dark border text-start" style="width: fit-content; font-size: 11px;">
+                        <i class="bi bi-building me-1 text-success"></i> {{ $penerima->nama_satker }}
+                    </span>
+                @endforeach
+            @endif
 
-        {{-- 3. PRIORITAS KETIGA: JIKA DIRECT KE PEGAWAI (PERBAIKAN: LABEL PERSONAL DIGANTI NAMA) --}}
-        @elseif($isKePegawaiDirect)
-            @foreach($riwayatPegawai as $rp)
-                @php $namaPegawai = $rp->penerima->name ?? 'User Tidak Ditemukan'; @endphp
+            {{-- 3. REKTORAT --}}
+            @if($isKeRektorat && !$isKePegawaiDirect && !$isAntarSatker)
                 <div class="d-flex flex-column mb-1">
-                    <!-- <span class="fw-bold text-dark">{{ $namaPegawai }}</span> -->
+                    <span class="fw-bold text-dark" style="font-size: 12px;">{{ $surat->tujuan_surat }}</span>
                     <span class="badge bg-light text-dark border text-start" style="width: fit-content; font-size: 10px;">
-                        <i class="bi bi-person me-1 text-primary"></i> {{ $namaPegawai }}
+                        <i class="bi bi-arrow-right-circle me-1 text-warning"></i> Via BAU
                     </span>
                 </div>
-            @endforeach
+            @endif
 
-        {{-- 4. JIKA TIDAK ADA SAMA SEKALI --}}
-        @else
-            <span class="text-muted fst-italic">- Tidak ada tujuan -</span>
-        @endif
-    </div>
-</td>
+            {{-- FALLBACK --}}
+            @if(!$isKePegawaiDirect && !$isAntarSatker && !$isKeRektorat)
+                <span class="text-muted fst-italic">{{ $surat->tujuan_surat ?: '- Tidak ada tujuan -' }}</span>
+            @endif
+        </div>
+    </td>
 
         {{-- NO SURAT & PERIHAL --}}
         <td>
-            <span class="fw-bold text-primary">{{ $surat->nomor_surat }}</span>
-            <br>
+            <div class="d-flex align-items-center gap-2 mb-1">
+                <span class="fw-bold text-primary">{{ $surat->nomor_surat }}</span>
+                @if($surat->sifat)
+                    <span class="badge bg-info p-1" style="font-size: 9px;">{{ $surat->sifat }}</span>
+                @endif
+            </div>
             <span class="text-muted small text-wrap d-block mt-1" style="line-height: 1.2;">
                 {{ Str::limit($surat->perihal, 60) }}
             </span>
@@ -238,16 +284,24 @@
         {{-- FILE --}}
         <td class="text-center">
             @if($surat->file_surat)
+                @php
+                    $mengetahui = $surat->validasis->map(function($v) {
+                        return ['nama' => $v->pimpinan->name, 'status' => $v->status, 'catatan' => $v->catatan];
+                    });
+                    $tembusan = $surat->tembusans->map(function($t) {
+                        return $t->satker->nama_satker ?? ($t->user->name ?? 'User');
+                    });
+                @endphp
                 <button type="button" class="btn btn-outline-primary btn-sm btn-icon" 
-                        title="Lihat File"
                         data-bs-toggle="modal" 
                         data-bs-target="#filePreviewModal"
                         data-title="{{ $surat->perihal }}"
-                        data-file-url="{{ asset('storage/' . $surat->file_surat) }}">
+                        data-nomor="{{ $surat->nomor_surat }}"
+                        data-file-url="{{ asset('storage/' . $surat->file_surat) }}"
+                        data-mengetahui='@json($mengetahui)'
+                        data-tembusan='@json($tembusan)'>
                     <i class="bi bi-file-earmark-pdf-fill"></i>
                 </button>
-            @else
-                <span class="text-muted small">-</span>
             @endif
         </td>
 
@@ -259,47 +313,46 @@
         </td>
 
         {{-- KOLOM AKSI --}}
-<td class="text-center">
-    <div class="d-flex justify-content-center gap-2">
-        @if(!$isLocked)
-            {{-- 1. TOMBOL EDIT (Hanya jika belum locked) --}}
-            <a href="{{ route('satker.surat-keluar.internal.edit', $surat->id) }}" class="btn btn-sm btn-warning text-white" title="Edit">
-                <i class="bi bi-pencil-fill small"></i>
-            </a>
-        @endif
+        <td class="text-center">
+            <div class="d-flex justify-content-center gap-2">
+                @if(!$isLocked)
+                    {{-- Edit --}}
+                    <a href="{{ route('satker.surat-keluar.internal.edit', $surat->id) }}" class="btn btn-sm btn-warning text-white" title="Edit">
+                        <i class="bi bi-pencil-fill small"></i>
+                    </a>
+                    
+                    {{-- Kirim Ulang (Hanya Saat Revisi) --}}
+                    @if($adaRevisi > 0)
+                        <form action="{{ route('satker.satker.surat-keluar.internal.resend', $surat->id) }}" method="POST" class="d-inline">
+                            @csrf
+                            <button type="submit" class="btn btn-sm btn-success text-white" title="Kirim Ulang">
+                                <i class="bi bi-send-fill small"></i>
+                            </button>
+                        </form>
+                    @endif
 
-        {{-- 2. TOMBOL HAPUS (Selalu muncul sesuai permintaan Anda) --}}
-        <form action="{{ route('satker.surat-keluar.internal.destroy', $surat->id) }}" method="POST" class="d-inline" onsubmit="return confirm('Hapus surat ini?');">
-            @csrf @method('DELETE')
-            <button type="submit" class="btn btn-sm btn-danger" title="Hapus">
-                <i class="bi bi-trash-fill small"></i>
-            </button>
-        </form>
+                    {{-- Hapus --}}
+                    <form action="{{ route('satker.surat-keluar.internal.destroy', $surat->id) }}" method="POST" class="d-inline" onsubmit="return confirm('Hapus surat ini?');">
+                        @csrf @method('DELETE')
+                        <button type="submit" class="btn btn-sm btn-danger" title="Hapus">
+                            <i class="bi bi-trash-fill small"></i>
+                        </button>
+                    </form>
+                @endif
 
-        {{-- 3. TOMBOL LOG/RIWAYAT (Selalu muncul, desain menyesuaikan kondisi locked) --}}
-        @if(!$isLocked)
-            <button class="btn btn-sm btn-light border btn-icon rounded-circle" 
-                    data-bs-toggle="modal" 
-                    data-bs-target="#riwayatModal" 
-                    data-url="{{ route('satker.surat-keluar.internal.riwayat-status', $surat->id) }}"
-                    title="Lihat Log">
-                <i class="bi bi-clock-history"></i>
-            </button>
-        @else
-            <button type="button" class="btn btn-secondary btn-sm btn-icon shadow-sm"
-                    data-id="{{ $surat->id }}" 
-                    data-bs-toggle="modal" 
-                    data-bs-target="#riwayatModal" 
-                    data-url="{{ route('satker.surat-keluar.internal.riwayat-status', $surat->id) }}"
-                    title="Lihat Log">
-                 <i class="bi bi-clock-history"></i>
-            </button>
-        @endif
-    </div>
-</td>
+                <button class="btn btn-sm {{ $isLocked ? 'btn-secondary' : 'btn-light border' }} btn-icon rounded-circle" 
+                        data-bs-toggle="modal" 
+                        data-bs-target="#riwayatModal" 
+                        data-url="{{ route('satker.surat-keluar.internal.riwayat-status', $surat->id) }}"
+                        title="Lihat Log">
+                    <i class="bi bi-clock-history"></i>
+                </button>
+            </div>
+        </td>
     </tr>
 @endforeach
 </tbody>
+          
                 </table>
             </div>
         </div>
@@ -313,8 +366,7 @@
                 <h5 class="modal-title" id="riwayatModalLabel">Riwayat Surat</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <div class="modal-body bg-light" id="riwayatModalBody">
-                </div>
+            <div class="modal-body bg-light" id="riwayatModalBody"></div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Tutup</button>
             </div>
@@ -324,23 +376,43 @@
 
 {{-- MODAL PREVIEW FILE --}}
 <div class="modal fade" id="filePreviewModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-xl">
+    <div class="modal-dialog modal-xl modal-dialog-centered">
         <div class="modal-content">
-            <div class="modal-header bg-light">
-                <h5 class="modal-title fw-bold" id="filePreviewModalLabel">Preview Surat</h5>
+            <div class="modal-header bg-white border-bottom">
+                <h6 class="modal-title fw-bold text-primary" id="filePreviewModalLabel">Preview Surat</h6>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <div class="modal-body p-0 bg-secondary bg-opacity-10">
-                <div id="file-viewer-container" class="d-flex align-items-center justify-content-center" style="height: 75vh; width: 100%;">
-                    <div class="spinner-border text-primary" role="status">
+            <div class="modal-body p-0 d-flex flex-column flex-lg-row" style="height: 80vh;">
+                <div id="file-viewer-container" class="flex-grow-1 bg-dark d-flex align-items-center justify-content-center">
+                    <div class="spinner-border text-light" role="status">
                         <span class="visually-hidden">Loading...</span>
                     </div>
                 </div>
+
+                <div class="bg-light border-start" style="width: 350px; overflow-y: auto;">
+                    <div class="p-3">
+                        <h6 class="fw-bold small text-secondary mb-3 border-bottom pb-2">DETAIL DOKUMEN</h6>
+                        <div id="detail-nomor" class="mb-2 fw-bold text-primary small"></div>
+                        <div id="detail-perihal" class="small text-muted mb-4" style="font-size: 11px;"></div>
+
+                        <div class="mb-4">
+                            <h6 class="fw-bold small" style="font-size: 12px;"><i class="bi bi-shield-check me-2"></i>MENGETAHUI</h6>
+                            <div id="container-mengetahui" class="d-flex flex-column gap-2 mt-2">
+                                </div>
+                        </div>
+
+                        <div>
+                            <h6 class="fw-bold small" style="font-size: 12px;"><i class="bi bi-info-circle me-2"></i>TEMBUSAN</h6>
+                            <div id="container-tembusan" class="d-flex flex-column gap-2 mt-2">
+                                </div>
+                        </div>
+                    </div>
+                </div>
             </div>
-            <div class="modal-footer bg-white border-top">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Tutup</button>
-                <a href="#" id="btn-download-file" class="btn btn-primary shadow-sm" download target="_blank">
-                    <i class="bi bi-download me-1"></i> Download File
+            <div class="modal-footer bg-white">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Tutup</button>
+                <a href="#" id="btn-download-file" class="btn btn-primary btn-sm shadow-sm" download target="_blank">
+                    <i class="bi bi-download me-1"></i> Download
                 </a>
             </div>
         </div>
@@ -368,136 +440,144 @@
             }
         });
 
-        // Logika Modal Preview
-        var fileModal = document.getElementById('filePreviewModal');
-        if(fileModal){
-            fileModal.addEventListener('show.bs.modal', function (event) {
-                var button = event.relatedTarget;
-                var fileUrl = button.getAttribute('data-file-url');
-                var title = button.getAttribute('data-title');
-                
-                var modalTitle = fileModal.querySelector('.modal-title');
-                var container = fileModal.querySelector('#file-viewer-container');
-                var downloadBtn = fileModal.querySelector('#btn-download-file');
+      var fileModal = document.getElementById('filePreviewModal');
+if(fileModal){
+    fileModal.addEventListener('show.bs.modal', function (event) {
+        var button = event.relatedTarget;
+        var fileUrl = button.getAttribute('data-file-url');
+        var title = button.getAttribute('data-title');
+        var nomor = button.getAttribute('data-nomor');
+        
+        // Parsing data JSON
+        var dataMengetahui = JSON.parse(button.getAttribute('data-mengetahui') || '[]');
+        var dataTembusan = JSON.parse(button.getAttribute('data-tembusan') || '[]');
 
-                modalTitle.textContent = "Preview: " + title;
-                downloadBtn.href = fileUrl;
-                container.innerHTML = '<div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div>';
+        var modalTitle = fileModal.querySelector('.modal-title');
+        var container = fileModal.querySelector('#file-viewer-container');
+        var downloadBtn = fileModal.querySelector('#btn-download-file');
+        
+        // Panel Elements
+        var contMengetahui = fileModal.querySelector('#container-mengetahui');
+        var contTembusan = fileModal.querySelector('#container-tembusan');
+        fileModal.querySelector('#detail-nomor').textContent = nomor;
+        fileModal.querySelector('#detail-perihal').textContent = title;
 
-                if(fileUrl) {
-                    var extension = fileUrl.split('.').pop().toLowerCase().split('?')[0];
-                    setTimeout(function() {
-                        if (extension === 'pdf') {
-                            container.innerHTML = `<iframe src="${fileUrl}" width="100%" height="100%" style="border:none;"></iframe>`;
-                        } else if (['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'].includes(extension)) {
-                            container.innerHTML = `<img src="${fileUrl}" class="img-fluid shadow-sm rounded" style="max-height: 95%; max-width: 95%; object-fit: contain;">`;
-                        } else {
-                            container.innerHTML = `<div class="text-center p-5 bg-white rounded shadow-sm"><i class="bi bi-file-earmark-break h1 text-warning d-block mb-3" style="font-size: 3rem;"></i><h5 class="text-muted">Preview tidak tersedia</h5><p class="text-secondary small">Silakan unduh file untuk melihat isinya.</p></div>`;
-                        }
-                    }, 300);
-                } else {
-                    container.innerHTML = '<div class="text-center p-5 text-danger bg-white rounded">File tidak ditemukan.</div>';
-                }
-            });
-            
-            fileModal.addEventListener('hidden.bs.modal', function () {
-                var container = fileModal.querySelector('#file-viewer-container');
-                container.innerHTML = '';
-            });
+        modalTitle.textContent = "Preview Surat";
+        downloadBtn.href = fileUrl;
+
+// --- Render Mengetahui ---
+contMengetahui.innerHTML = dataMengetahui.length ? '' : '<small class="text-muted italic">Tidak ada validasi</small>';
+dataMengetahui.forEach(function(v) {
+    let color = v.status === 'setuju' ? 'success' : (v.status === 'revisi' ? 'danger' : 'secondary');
+    let icon = v.status === 'setuju' ? 'bi-check-circle-fill' : (v.status === 'revisi' ? 'bi-exclamation-circle-fill' : 'bi-hourglass-split');
+    
+    // Logika Catatan Revisi
+    let catatanHtml = (v.status === 'revisi' && v.catatan) 
+        ? `<div class="mt-1 p-1 bg-danger bg-opacity-10 border border-danger border-opacity-25 rounded text-danger" style="font-size: 9px; line-height: 1.1;">
+                <strong>Catatan:</strong> ${v.catatan}
+           </div>` 
+        : '';
+
+    contMengetahui.innerHTML += `
+        <div class="badge bg-light text-dark border d-flex flex-column p-2 text-start mb-1" style="white-space: normal;">
+            <div class="d-flex align-items-center">
+                <i class="bi ${icon} text-${color} me-2"></i>
+                <div style="font-size: 10px;">
+                    <span class="fw-bold d-block text-wrap">${v.nama}</span>
+                    <span class="text-${color} small" style="font-size: 9px;">${v.status.toUpperCase()}</span>
+                </div>
+            </div>
+            ${catatanHtml}
+        </div>`;
+});
+
+        // --- Render Tembusan ---
+        contTembusan.innerHTML = dataTembusan.length ? '' : '<small class="text-muted italic">Tidak ada tembusan</small>';
+        dataTembusan.forEach(function(t) {
+            contTembusan.innerHTML += `
+                <div class="badge bg-white text-dark border p-2 text-start small fw-normal" style="font-size: 10px;">
+                    <i class="bi bi-building text-primary me-2"></i>${t}
+                </div>`;
+        });
+
+        // --- Render File (Logika lama Anda) ---
+        if(fileUrl) {
+            var extension = fileUrl.split('.').pop().toLowerCase().split('?')[0];
+            if (extension === 'pdf') {
+                container.innerHTML = `<iframe src="${fileUrl}#toolbar=0" width="100%" height="100%" style="border:none;"></iframe>`;
+            } else if (['jpg', 'jpeg', 'png', 'webp'].includes(extension)) {
+                container.innerHTML = `<img src="${fileUrl}" class="img-fluid" style="max-height: 98%;">`;
+            }
         }
+    });
+}
     });
 </script>
 
 <script>
-    document.addEventListener('DOMContentLoaded', function () {
-        
-        var riwayatModal = document.getElementById('riwayatModal');
-        
-        // Cek dulu apakah modalnya ada di DOM untuk mencegah error 'qt'
-        if (riwayatModal) {
-            riwayatModal.addEventListener('show.bs.modal', function (event) {
-                var button = event.relatedTarget;
-                // Pengaman jika button tidak ada (misal dipanggil manual)
-                if (!button) return;
+document.addEventListener('DOMContentLoaded', function () {
+    var riwayatModal = document.getElementById('riwayatModal');
+    if (riwayatModal) {
+        riwayatModal.addEventListener('show.bs.modal', function (event) {
+            var button = event.relatedTarget;
+            if (!button) return;
 
-                var dataUrl = button.getAttribute('data-url');
-                var modalBody = riwayatModal.querySelector('#riwayatModalBody');
-                var modalLabel = riwayatModal.querySelector('#riwayatModalLabel');
+            var dataUrl = button.getAttribute('data-url');
+            var modalBody = riwayatModal.querySelector('#riwayatModalBody');
+            var modalLabel = riwayatModal.querySelector('#riwayatModalLabel');
 
-                // 1. Tampilkan Loading
-                modalBody.innerHTML = `
-                    <div class="text-center p-4">
-                        <div class="spinner-border text-primary" role="status"></div>
-                        <p class="mt-2 text-muted">Memuat data riwayat...</p>
-                    </div>
-                `;
+            modalBody.innerHTML = `<div class="text-center p-4"><div class="spinner-border text-primary" role="status"></div><p class="mt-2 text-muted">Memuat data...</p></div>`;
 
-                // 2. Fetch Data
-                if(dataUrl) {
-                    fetch(dataUrl)
-                        .then(response => {
-                            if (!response.ok) { throw new Error('Network response was not ok'); }
-                            return response.json();
-                        })
-                        .then(surat => {
-                            // Update Judul
-                            modalLabel.textContent = 'Riwayat No: ' + surat.nomor_surat;
+            if(dataUrl) {
+                fetch(dataUrl)
+                    .then(response => response.json())
+                    .then(surat => {
+                        modalLabel.textContent = 'Riwayat No: ' + surat.nomor_surat;
+                        var html = '<ul class="timeline">';
+                        
+                        if (surat.riwayats && surat.riwayats.length > 0) {
+                            surat.riwayats.forEach((item) => {
+                                var badgeColor = 'primary'; 
+                                var iconClass = 'bi-check';
+                                var status = item.status_aksi || '';
 
-                            // 3. Render Timeline
-                            var html = '<ul class="timeline">';
-                            
-                            if (surat.riwayats && surat.riwayats.length > 0) {
-                                surat.riwayats.forEach((item) => {
-                                    var badgeColor = 'primary'; 
-                                    var iconClass = 'bi-check';
-                                    var status = item.status_aksi || '';
+                                if (status.includes('Selesai') || status.includes('Arsip') || status.includes('Diterima oleh Pegawai')) {
+                                    badgeColor = 'success'; 
+                                    iconClass = 'bi-check-all';
+                                } else if (status.includes('Dikirim')) {
+                                    badgeColor = 'secondary';
+                                    iconClass = 'bi-send';
+                                } else if (status.includes('Diterima')) {
+                                    badgeColor = 'primary';
+                                    iconClass = 'bi-box-arrow-in-down';
+                                }
 
-                                   // Di dalam loop foreach riwayats pada JS:
-                                    if (status.includes('Selesai') || status.includes('Arsip')) {
-                                        badgeColor = 'success'; iconClass = 'bi-check-all';
-                                    } else if (status.includes('Disposisi') || status.includes('Diteruskan')) {
-                                        badgeColor = 'warning'; iconClass = 'bi-arrow-right-short';
-                                    } else if (status.includes('Diterima')) {
-                                        badgeColor = 'info'; iconClass = 'bi-box-arrow-in-down';
-                                    } else if (status.includes('Dibaca')) {
-                                        badgeColor = 'primary'; iconClass = 'bi-eye-fill';
-                                    } else if (status.includes('Dikirim') || status.includes('Input')) {
-                                        badgeColor = 'secondary'; iconClass = 'bi-send';
-                                    }
-
-                                    var dateObj = new Date(item.created_at);
-                                    var dateStr = dateObj.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-                                    var userName = item.user ? item.user.name : 'Sistem';
-
-                                    html += `
-                                        <li>
-                                            <div class="timeline-badge ${badgeColor}"><i class="bi ${iconClass}"></i></div>
-                                            <div class="timeline-panel">
-                                                <div class="timeline-heading">
-                                                    <h6 class="timeline-title fw-bold">${status}</h6>
-                                                    <p class="mb-0"><small class="text-muted"><i class="bi bi-clock"></i> ${dateStr} &bull; Oleh: <strong>${userName}</strong></small></p>
-                                                </div>
-                                                <div class="timeline-body mt-2">
-                                                    <p class="mb-0 text-dark small">${item.catatan ?? '-'}</p>
-                                                </div>
+                                var dateObj = new Date(item.created_at);
+                                var dateStr = dateObj.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+                                
+                                html += `
+                                    <li>
+                                        <div class="timeline-badge ${badgeColor}"><i class="bi ${iconClass}"></i></div>
+                                        <div class="timeline-panel">
+                                            <div class="timeline-heading">
+                                                <h6 class="timeline-title fw-bold">${status}</h6>
+                                                <p class="mb-0 small text-muted"><i class="bi bi-clock"></i> ${dateStr} &bull; Oleh: <strong>${item.user ? item.user.name : 'Sistem'}</strong></p>
                                             </div>
-                                        </li>
-                                    `;
-                                });
-                            } else {
-                                html += '<li class="text-center text-muted p-3">Belum ada riwayat aktivitas.</li>';
-                            }
-
-                            html += '</ul>';
-                            modalBody.innerHTML = html;
-                        })
-                        .catch(error => {
-                            console.error('Error:', error);
-                            modalBody.innerHTML = '<div class="alert alert-danger">Gagal memuat data riwayat. Silakan coba lagi.</div>';
-                        });
-                }
-            });
-        }
-    });
+                                            <div class="timeline-body mt-2">
+                                                <p class="mb-0 text-dark small">${item.catatan ?? '-'}</p>
+                                            </div>
+                                        </div>
+                                    </li>`;
+                            });
+                        } else {
+                            html += '<li class="text-center text-muted p-3">Belum ada riwayat.</li>';
+                        }
+                        html += '</ul>';
+                        modalBody.innerHTML = html;
+                    });
+            }
+        });
+    }
+});
 </script>
 @endpush

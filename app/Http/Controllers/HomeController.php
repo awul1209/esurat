@@ -7,7 +7,6 @@ use Illuminate\Support\Facades\Auth;
 use App\Http\Controllers\Bau\DashboardController; 
 use App\Http\Controllers\AdminRektor\DashboardController as AdminRektorDashboard;
 use App\Http\Controllers\Satker\DashboardController as SatkerDashboard; 
-// (BARU) Import Pegawai Dashboard
 use App\Http\Controllers\Pegawai\DashboardController as PegawaiDashboard; 
 
 class HomeController extends Controller
@@ -19,22 +18,44 @@ class HomeController extends Controller
 
     public function index()
     {
-        $role = Auth::user()->role;
+        $user = Auth::user();
+        $role = $user->role;
+        $jabatan_id = $user->jabatan_id;
 
+        // 1. ROLE: BAU (Gerbang Utama)
         if ($role == 'bau') {
             return (new DashboardController)->index();
 
+        // 2. ROLE: ADMIN REKTOR (Shared Inbox Rektorat)
         } elseif ($role == 'admin_rektor') {
             return (new AdminRektorDashboard)->index();
 
-        } elseif ($role == 'satker') {
+        // 3. ROLE: ADMIN SATKER (BARU - Sebelumnya 'satker')
+        // Ini adalah perbaikan agar Admin TU Fakultas bisa masuk
+        } elseif ($role == 'admin_satker') {
             return (new SatkerDashboard)->index();
         
-        // ====================================================
-        // (BARU) Tambahkan case untuk 'pegawai'
-        // ====================================================
+        // 4. ROLE: PIMPINAN (Rektor, Warek, Dekan, Wadek, Kabiro)
+        } elseif ($role == 'pimpinan') {
+            /**
+             * LOGIKA REDIRECT PIMPINAN:
+             * - Pimpinan Utama (Rektor ID 1, Dekan ID 5, Kabiro ID 7) diarahkan ke dashboard unit (Shared Inbox)
+             * - Pimpinan Bidang (Warek ID 2,3,4, Wadek ID 6) diarahkan ke dashboard personal (Filtered Inbox)
+             */
+            if (in_array($jabatan_id, [1, 5, 7])) {
+                // Jika Rektor, gunakan dashboard Admin Rektor
+                if ($user->satker_id == 1) {
+                    return (new AdminRektorDashboard)->index();
+                }
+                // Jika Dekan/Kabiro, gunakan dashboard Satker
+                return (new SatkerDashboard)->index();
+            } else {
+                // Wakil (Warek/Wadek) diarahkan ke dashboard personal seperti pegawai
+                return (new SatkerDashboard)->index();
+            }
+
+        // 5. ROLE: PEGAWAI
         } elseif ($role == 'pegawai') {
-            // Arahkan ke Dashboard Pegawai (KPI & Chart)
             return (new PegawaiDashboard)->index();
 
         } else {

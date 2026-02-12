@@ -4,30 +4,23 @@
 <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" />
 <style>
-    .form-label { font-weight: 600; font-size: 0.9rem; color: #495057; }
+    .form-label { font-weight: 600; font-size: 0.85rem; color: #495057; }
     .card-header { background: linear-gradient(45deg, #f8f9fa, #e9ecef); }
+    .revisi-alert { background-color: #fff5f5; border-left: 4px solid #f56565; border-radius: 8px; }
     
-    /* Area Preview Upload Baru */
-    #preview-container { 
-        display: none; 
+    .tujuan-row { 
         background-color: #f8f9fa; 
-        border: 2px dashed #dee2e6; 
+        border: 1px solid #dee2e6; 
         border-radius: 8px; 
         padding: 15px; 
-        text-align: center;
-        margin-top: 10px;
+        position: relative;
     }
-    #preview-image { max-width: 100%; max-height: 400px; object-fit: contain; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+    .btn-remove-row { position: absolute; top: -10px; right: -10px; border-radius: 50%; width: 25px; height: 25px; padding: 0; line-height: 25px; }
+
+    #preview-container { display: none; margin-top: 10px; border: 1px dashed #ced4da; padding: 10px; border-radius: 5px; text-align: center; }
     #preview-pdf { width: 100%; height: 500px; border: 1px solid #dee2e6; border-radius: 4px; }
-    
-    /* File Lama Info */
-    .current-file-box {
-        background-color: #e9ecef;
-        border-radius: 6px;
-        padding: 10px;
-        margin-bottom: 10px;
-        font-size: 0.9rem;
-    }
+    .current-file-box { background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px 15px; }
+    .badge-optional { background-color: #e9ecef; color: #6c757d; font-weight: normal; }
 </style>
 @endpush
 
@@ -35,130 +28,203 @@
 <div class="container-fluid px-3 py-2">
     <div class="row justify-content-center">
         <div class="col-lg-12">
+            
+            {{-- AREA NOTIFIKASI REVISI --}}
+            @php $revisi = $surat->validasis->where('status', 'revisi')->first(); @endphp
+            @if($revisi)
+            <div class="revisi-alert p-3 mb-4 shadow-sm">
+                <div class="d-flex align-items-center mb-2">
+                    <i class="bi bi-exclamation-octagon-fill text-danger fs-4 me-2"></i>
+                    <h6 class="m-0 fw-bold text-danger">Catatan Revisi Pimpinan</h6>
+                </div>
+                <div class="bg-white p-3 rounded border border-danger-subtle shadow-sm">
+                    <p class="mb-0 text-dark">"{{ $revisi->catatan }}"</p>
+                </div>
+            </div>
+            @endif
+
             <div class="card shadow border-0 rounded-3">
-                <div class="card-header py-3 border-bottom d-flex align-items-center">
-                    <i class="bi bi-pencil-square text-warning me-2 fs-5"></i>
-                    <h6 class="m-0 fw-bold text-primary">Edit Surat Keluar Internal</h6>
+                <div class="card-header py-3 d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center">
+                        <i class="bi bi-pencil-square text-primary me-2 fs-5"></i>
+                        <h6 class="m-0 fw-bold text-primary">Edit Surat Keluar Internal</h6>
+                    </div>
                 </div>
                 
                 <div class="card-body p-4">
-                    
-                    @if ($errors->any())
-                        <div class="alert alert-danger alert-dismissible fade show mb-4" role="alert">
-                            <i class="bi bi-exclamation-triangle-fill me-2"></i> Periksa kembali inputan Anda.
-                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                        </div>
-                    @endif
-
                     <form action="{{ route('satker.surat-keluar.internal.update', $surat->id) }}" method="POST" enctype="multipart/form-data">
                         @csrf
-                        @method('PUT') 
-                        
-                        {{-- Baris 1: No Surat & Tanggal --}}
-                        <div class="row g-3 mb-3">
-                            <div class="col-md-8">
+                        @method('PUT')
+
+                        {{-- Data Dasar Surat --}}
+                        <div class="row g-3 mb-4">
+                            <div class="col-md-3">
                                 <label class="form-label">Nomor Surat <span class="text-danger">*</span></label>
-                                <div class="input-group">
-                                    <span class="input-group-text bg-light"><i class="bi bi-123"></i></span>
-                                    <input type="text" name="nomor_surat" 
-                                           class="form-control @error('nomor_surat') is-invalid @enderror" 
-                                           value="{{ old('nomor_surat', $surat->nomor_surat) }}" required>
-                                    @error('nomor_surat') <div class="invalid-feedback">{{ $message }}</div> @enderror
-                                </div>
+                                <input type="text" name="nomor_surat" class="form-control" value="{{ old('nomor_surat', $surat->nomor_surat) }}" required>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Tanggal Surat <span class="text-danger">*</span></label>
+                                <input type="date" name="tanggal_surat" class="form-control" value="{{ old('tanggal_surat', $surat->tanggal_surat->format('Y-m-d')) }}" required>
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label">Sifat Surat <span class="text-danger">*</span></label>
+                                <select name="sifat" class="form-select" required>
+                                    <option value="Biasa" {{ $surat->sifat == 'Biasa' ? 'selected' : '' }}>Biasa</option>
+                                    <option value="Penting" {{ $surat->sifat == 'Penting' ? 'selected' : '' }}>Penting</option>
+                                    <option value="Rahasia" {{ $surat->sifat == 'Rahasia' ? 'selected' : '' }}>Rahasia</option>
+                                    <option value="Segera" {{ $surat->sifat == 'Segera' ? 'selected' : '' }}>Segera</option>
+                                </select>
                             </div>
                             <div class="col-md-4">
-                                <label class="form-label">Tanggal Surat <span class="text-danger">*</span></label>
-                                <input type="date" name="tanggal_surat" 
-                                       class="form-control @error('tanggal_surat') is-invalid @enderror" 
-                                       value="{{ old('tanggal_surat', $surat->tanggal_surat->format('Y-m-d')) }}" required>
-                                @error('tanggal_surat') <div class="invalid-feedback">{{ $message }}</div> @enderror
-                            </div>
-                        </div>
-
-                        {{-- Baris 2: Tujuan & Perihal --}}
-                        <div class="row g-3 mb-3">
-                            <div class="col-md-6">
-                                <label class="form-label">Tujuan Surat <span class="text-danger">*</span></label>
-                                <select name="tujuan_satker_ids[]" class="form-select select2 @error('tujuan_satker_ids') is-invalid @enderror" multiple="multiple" required>
-                                    
-                                    {{-- Cek apakah tujuan lama adalah Universitas/Rektor --}}
-                                    @php
-                                        $tujuanLama = collect($selectedSatkerIds); 
-                                        $isRektor = !empty($surat->tujuan_surat); 
-                                    @endphp
-
-                                    <optgroup label="Pimpinan (Via BAU)">
-                                        <option value="universitas" {{ $isRektor ? 'selected' : '' }}>Rektor / Universitas</option>
-                                    </optgroup>
-
-                                    <optgroup label="Satuan Kerja (Langsung)">
-                                        @foreach($daftarSatker as $satker)
-                                            <option value="{{ $satker->id }}" 
-                                                {{ $tujuanLama->contains($satker->id) ? 'selected' : '' }}>
-                                                {{ $satker->nama_satker }}
-                                            </option>
-                                        @endforeach
-                                    </optgroup>
-                                </select>
-                                @error('tujuan_satker_ids') <div class="text-danger small mt-1">{{ $message }}</div> @enderror
-                            </div>
-
-                            <div class="col-md-6">
                                 <label class="form-label">Perihal <span class="text-danger">*</span></label>
-                                <textarea name="perihal" class="form-control @error('perihal') is-invalid @enderror" rows="1" style="height: 38px;" required>{{ old('perihal', $surat->perihal) }}</textarea>
-                                @error('perihal') <div class="invalid-feedback">{{ $message }}</div> @enderror
+                                <input type="text" name="perihal" class="form-control" value="{{ old('perihal', $surat->perihal) }}" required>
                             </div>
                         </div>
 
-                        {{-- Baris 3: File Upload & Preview --}}
-                        <div class="mb-4">
-                            <label class="form-label">File Surat</label>
-                            
-                            {{-- Info File Saat Ini (MODAL TRIGGER) --}}
-                            @if($surat->file_surat)
-                                <div class="current-file-box d-flex justify-content-between align-items-center">
-                                    <span>
-                                        <i class="bi bi-file-earmark-check text-success me-2"></i> 
-                                        File saat ini: <strong>Tersedia</strong>
-                                    </span>
-                                    {{-- TOMBOL INI MEMICU MODAL --}}
-                                    <button type="button" class="btn btn-sm btn-outline-primary" 
-                                            data-bs-toggle="modal" 
-                                            data-bs-target="#existingFileModal"
-                                            data-file-url="{{ asset('storage/' . $surat->file_surat) }}">
-                                        <i class="bi bi-eye me-1"></i> Lihat File Lama
-                                    </button>
-                                </div>
-                            @endif
+                        <hr>
 
-                            <input type="file" name="file_surat" id="fileInput" 
-                                   class="form-control @error('file_surat') is-invalid @enderror" 
-                                   accept=".pdf,.jpg,.jpeg,.png" onchange="previewNewFile()">
-                            <div class="form-text text-muted">Upload file baru HANYA jika ingin mengganti file lama. (Max: 5MB)</div>
-                            @error('file_surat') <div class="invalid-feedback">{{ $message }}</div> @enderror
-
-                            {{-- Area Preview File Baru --}}
-                            <div id="preview-container">
-                                <div class="d-flex justify-content-between align-items-center mb-2">
-                                    <small class="fw-bold text-muted">Preview File Baru:</small>
-                                    <button type="button" class="btn btn-xs btn-outline-danger" onclick="resetFile()">Batal Ganti</button>
-                                </div>
-                                <img id="preview-image" src="#" alt="Preview Gambar" style="display: none;">
-                                <iframe id="preview-pdf" src="" style="display: none;"></iframe>
-                                <div id="preview-text" class="text-muted fst-italic py-3" style="display: none;"></div>
-                            </div>
-                        </div>
-                        
-                        {{-- Tombol Aksi --}}
-                        <div class="d-flex justify-content-between pt-3 border-top">
-                            <a href="{{ route('satker.surat-keluar.internal') }}" class="btn btn-outline-secondary px-4">
-                                <i class="bi bi-arrow-left me-1"></i> Batal
-                            </a>
-                            <button type="submit" class="btn btn-warning text-white px-4 shadow-sm">
-                                <i class="bi bi-save-fill me-1"></i> Simpan Perubahan
+                        {{-- Area Tujuan Berjenjang --}}
+                        <div class="mb-3 d-flex justify-content-between align-items-center">
+                            <h6 class="fw-bold text-secondary m-0">Daftar Tujuan Surat</h6>
+                            <button type="button" class="btn btn-sm btn-outline-primary" id="add-tujuan">
+                                <i class="bi bi-plus-circle me-1"></i> Tambah Unit Tujuan
                             </button>
                         </div>
 
+                        <div id="wrapper-tujuan">
+                            @php
+                                // Mengelompokkan riwayat berdasarkan user pengirim untuk membedakan tujuan asli
+                                $pimpinanIds = $surat->validasis->pluck('pimpinan_id')->toArray();
+                                $tujuanEksisting = $surat->riwayats->where('user_id', $surat->user_id)
+                                    ->whereNotNull('penerima_id')
+                                    ->whereNotIn('penerima_id', $pimpinanIds)
+                                    ->groupBy(function($item) {
+                                        return $item->penerima->satker_id ?? 'rektor';
+                                    });
+                            @endphp
+
+                            @forelse($tujuanEksisting as $satkerId => $riwayats)
+                            <div class="tujuan-row mb-3 shadow-sm">
+                                @if(!$loop->first)
+                                    <button type="button" class="btn btn-danger btn-sm btn-remove-row"><i class="bi bi-x"></i></button>
+                                @endif
+                                <div class="row g-3">
+                                    <div class="col-md-4">
+                                        <label class="form-label text-primary">1. Pilih Fakultas / Unit</label>
+                                        <select class="form-select select-satker-dynamic" required>
+                                            <option value="rektor" {{ $satkerId == 'rektor' ? 'selected' : '' }}>Rektorat / Universitas</option>
+                                            @foreach($daftarSatker as $satker)
+                                                <option value="{{ $satker->id }}" {{ $satkerId == $satker->id ? 'selected' : '' }}>{{ $satker->nama_satker }}</option>
+                                            @endforeach
+                                        </select>
+                                    </div>
+                                    <div class="col-md-8">
+                                        <label class="form-label text-primary">2. Pilih Pejabat / Pegawai Penerima</label>
+                                        <select name="tujuan_user_ids[]" class="form-select select-user-dynamic" multiple="multiple" required>
+                                            @foreach($riwayats as $r)
+                                                <option value="{{ $r->penerima_id }}" selected>{{ $r->penerima->name }}</option>
+                                            @endforeach
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                            @empty
+                            {{-- Row default jika data tidak ditemukan --}}
+                            <div class="tujuan-row mb-3 shadow-sm">
+                                <div class="row g-3">
+                                    <div class="col-md-4">
+                                        <label class="form-label text-primary">1. Pilih Fakultas / Unit</label>
+                                        <select class="form-select select-satker-dynamic" required>
+                                            <option value="">-- Pilih Satker --</option>
+                                            <option value="rektor">Rektorat / Universitas</option>
+                                            @foreach($daftarSatker as $satker)
+                                                <option value="{{ $satker->id }}">{{ $satker->nama_satker }}</option>
+                                            @endforeach
+                                        </select>
+                                    </div>
+                                    <div class="col-md-8">
+                                        <label class="form-label text-primary">2. Pilih Pejabat / Pegawai Penerima</label>
+                                        <select name="tujuan_user_ids[]" class="form-select select-user-dynamic" multiple="multiple" required></select>
+                                    </div>
+                                </div>
+                            </div>
+                            @endforelse
+                        </div>
+
+                        <hr class="my-4">
+                        <h6 class="fw-bold mb-3 text-secondary"><i class="bi bi-diagram-3-fill me-2"></i>Alur Validasi & Tembusan <span class="badge badge-optional ms-1">Opsional</span></h6>
+
+                        <div class="row g-3 mb-4">
+                            <div class="col-md-6">
+                                <label class="form-label text-primary">Mengetahui / Validasi</label>
+                                <select name="pimpinan_ids[]" id="select-pimpinan" class="form-select" multiple="multiple">
+                                    @php $selectedPimpinan = $surat->validasis->pluck('pimpinan_id')->toArray(); @endphp
+                                    @foreach($pimpinans as $p)
+                                        <option value="{{ $p->id }}" {{ in_array($p->id, $selectedPimpinan) ? 'selected' : '' }}>
+                                            {{ $p->name }} ({{ $p->jabatan->nama_jabatan }})
+                                        </option>
+                                    @endforeach
+                                </select>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="form-label text-info">Tembusan Tambahan</label>
+                                <select name="tembusan_ids[]" id="select-tembusan" class="form-select" multiple="multiple">
+                                    @php 
+                                        // Logika untuk mengambil tembusan lama jika ada
+                                        $selectedTembusanUser = $surat->riwayats->where('status_aksi', 'LIKE', '%Tembusan%')->pluck('penerima_id')->toArray();
+                                    @endphp
+                                    <optgroup label="Pimpinan / Pejabat">
+                                        @foreach($pimpinans as $p)
+                                            <option value="user_{{ $p->id }}" {{ in_array($p->id, $selectedTembusanUser) ? 'selected' : '' }}>
+                                                {{ $p->name }} ({{ $p->jabatan->nama_jabatan }})
+                                            </option>
+                                        @endforeach
+                                    </optgroup>
+                                    <optgroup label="Unit / Satuan Kerja">
+                                        @foreach($satkers as $s)
+                                            @if($s->nama_satker != 'Biro Administrasi Umum (BAU)') 
+                                                <option value="satker_{{ $s->id }}">{{ $s->nama_satker }}</option>
+                                            @endif
+                                        @endforeach
+                                    </optgroup>
+                                </select>
+                            </div>
+                        </div>
+
+                        <hr class="my-4">
+
+                        {{-- File Management --}}
+                        <div class="mb-4">
+                            <label class="form-label">File Surat (PDF)</label>
+                            
+                            @if($surat->file_surat)
+                            <div class="current-file-box d-flex justify-content-between align-items-center mb-3">
+                                <span><i class="bi bi-file-earmark-pdf-fill text-danger me-2"></i> File Aktif: <strong>{{ basename($surat->file_surat) }}</strong></span>
+                                <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modalFileLama">
+                                    <i class="bi bi-eye"></i> Lihat File
+                                </button>
+                            </div>
+                            @endif
+
+                            <input type="file" name="file_surat" id="fileInput" class="form-control" accept=".pdf" onchange="previewFile()">
+                            <small class="text-muted">Biarkan kosong jika tidak ingin mengganti file.</small>
+                            
+                            <div id="preview-container">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <span class="badge bg-warning text-dark">Pratinjau File Baru</span>
+                                    <button type="button" class="btn btn-sm btn-link text-danger p-0 fw-bold" onclick="resetFileInput()">Hapus</button>
+                                </div>
+                                <iframe id="preview-pdf" src="" style="display: none;"></iframe>
+                            </div>
+                        </div>
+
+                        <div class="d-flex justify-content-between mt-4 border-top pt-3">
+                            <a href="{{ route('satker.surat-keluar.internal') }}" class="btn btn-light px-4 border">Batal</a>
+                            <button type="submit" id="btnSubmit" class="btn btn-primary px-5 shadow-sm">
+                                <i class="bi bi-save-fill me-1"></i> Simpan & Kirim Kembali
+                            </button>
+                        </div>
                     </form>
                 </div>
             </div>
@@ -166,31 +232,20 @@
     </div>
 </div>
 
-{{-- MODAL PREVIEW FILE LAMA --}}
-<div class="modal fade" id="existingFileModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-xl">
-        <div class="modal-content">
-            <div class="modal-header bg-light">
-                <h5 class="modal-title fw-bold">Preview File Lama</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+{{-- MODAL FILE LAMA --}}
+<div class="modal fade" id="modalFileLama" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered">
+        <div class="modal-content border-0">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title">File Surat Terarsip</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
-            <div class="modal-body p-0 bg-secondary bg-opacity-10">
-                <div id="existing-file-viewer" class="d-flex align-items-center justify-content-center" style="height: 75vh; width: 100%;">
-                    <div class="spinner-border text-primary" role="status">
-                        <span class="visually-hidden">Loading...</span>
-                    </div>
-                </div>
-            </div>
-            <div class="modal-footer bg-white border-top">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Tutup</button>
-                <a href="#" id="btn-download-existing" class="btn btn-primary" download target="_blank">
-                    <i class="bi bi-download me-1"></i> Download File
-                </a>
+            <div class="modal-body p-0">
+                <iframe src="{{ asset('storage/' . $surat->file_surat) }}" width="100%" height="75vh" style="border:none;"></iframe>
             </div>
         </div>
     </div>
 </div>
-
 @endsection
 
 @push('scripts')
@@ -198,87 +253,100 @@
 <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 <script>
     $(document).ready(function() {
-        // Init Select2
-        $('.select2').select2({
-            theme: 'bootstrap-5',
-            placeholder: 'Pilih Tujuan...',
-            allowClear: true,
-            width: '100%'
-        });
+        function initSelect2(element, placeholder = 'Pilih...') {
+            $(element).select2({ 
+                theme: 'bootstrap-5', 
+                width: '100%', 
+                placeholder: placeholder,
+                allowClear: true 
+            });
+        }
 
-        // --- LOGIKA MODAL PREVIEW FILE LAMA ---
-        var existingFileModal = document.getElementById('existingFileModal');
-        existingFileModal.addEventListener('show.bs.modal', function (event) {
-            var button = event.relatedTarget;
-            var fileUrl = button.getAttribute('data-file-url');
-            
-            var container = existingFileModal.querySelector('#existing-file-viewer');
-            var downloadBtn = existingFileModal.querySelector('#btn-download-existing');
+        // Inisialisasi awal
+        initSelect2('.select-satker-dynamic');
+        initSelect2('.select-user-dynamic');
+        initSelect2('#select-pimpinan');
+        initSelect2('#select-tembusan');
 
-            downloadBtn.href = fileUrl;
-            container.innerHTML = '<div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div>';
+        // Load users untuk baris yang sudah ada (edit mode)
+        $('.select-satker-dynamic').each(function() {
+            const satkerId = $(this).val();
+            const row = $(this).closest('.tujuan-row');
+            const userSelect = row.find('.select-user-dynamic');
+            const existingValues = userSelect.val(); // Simpan ID yang sudah terpilih
 
-            if(fileUrl) {
-                var extension = fileUrl.split('.').pop().toLowerCase().split('?')[0];
-                setTimeout(function() {
-                    if (extension === 'pdf') {
-                        container.innerHTML = `<iframe src="${fileUrl}" width="100%" height="100%" style="border:none;"></iframe>`;
-                    } else if (['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'].includes(extension)) {
-                        container.innerHTML = `<img src="${fileUrl}" class="img-fluid shadow-sm rounded" style="max-height: 95%; max-width: 95%; object-fit: contain;">`;
-                    } else {
-                        container.innerHTML = `<div class="text-center p-5 bg-white rounded shadow-sm"><i class="bi bi-file-earmark-break h1 text-warning d-block mb-3" style="font-size: 3rem;"></i><h5 class="text-muted">Preview tidak tersedia</h5><p class="text-secondary small">Silakan unduh file untuk melihat isinya.</p></div>`;
-                    }
-                }, 300);
+            if (satkerId) {
+                $.get("{{ route('api.get-pegawai-by-satker') }}", { satker_id: satkerId }, function(data) {
+                    // Jangan hapus yang sudah terpilih, cukup tambahkan pilihan lainnya
+                    data.forEach(u => {
+                        if (!userSelect.find(`option[value="${u.id}"]`).length) {
+                            userSelect.append(`<option value="${u.id}">${u.name}</option>`);
+                        }
+                    });
+                    userSelect.trigger('change');
+                });
             }
         });
 
-        // Bersihkan saat modal ditutup
-        existingFileModal.addEventListener('hidden.bs.modal', function () {
-            var container = existingFileModal.querySelector('#existing-file-viewer');
-            container.innerHTML = '';
+        $('#add-tujuan').on('click', function() {
+            let newRow = `
+            <div class="tujuan-row mb-3 shadow-sm">
+                <button type="button" class="btn btn-danger btn-sm btn-remove-row"><i class="bi bi-x"></i></button>
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label text-primary">1. Pilih Fakultas / Unit</label>
+                        <select class="form-select select-satker-dynamic" required>
+                            <option value="">-- Pilih Satker --</option>
+                            <option value="rektor">Rektorat / Universitas</option>
+                            @foreach($daftarSatker as $satker)
+                                <option value="{{ $satker->id }}">{{ $satker->nama_satker }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div class="col-md-8">
+                        <label class="form-label text-primary">2. Pilih Nama Penerima (User)</label>
+                        <select name="tujuan_user_ids[]" class="form-select select-user-dynamic" multiple="multiple" required></select>
+                    </div>
+                </div>
+            </div>`;
+            $('#wrapper-tujuan').append(newRow);
+            initSelect2($('#wrapper-tujuan .tujuan-row:last-child .select-satker-dynamic'));
+            initSelect2($('#wrapper-tujuan .tujuan-row:last-child .select-user-dynamic'));
+        });
+
+        $(document).on('click', '.btn-remove-row', function() {
+            $(this).closest('.tujuan-row').remove();
+        });
+
+        $(document).on('change', '.select-satker-dynamic', function() {
+            const satkerId = $(this).val();
+            const row = $(this).closest('.tujuan-row');
+            const userSelect = row.find('.select-user-dynamic');
+
+            if (satkerId) {
+                userSelect.empty().append('<option value="">Loading...</option>');
+                $.get("{{ route('api.get-pegawai-by-satker') }}", { satker_id: satkerId }, function(data) {
+                    userSelect.empty();
+                    data.forEach(u => userSelect.append(`<option value="${u.id}">${u.name}</option>`));
+                    userSelect.trigger('change');
+                });
+            }
         });
     });
 
-    // --- FUNGSI PREVIEW FILE BARU (Saat Upload) ---
-    function previewNewFile() {
-        const fileInput = document.getElementById('fileInput');
-        const previewContainer = document.getElementById('preview-container');
-        const previewImage = document.getElementById('preview-image');
-        const previewPdf = document.getElementById('preview-pdf');
-        const previewText = document.getElementById('preview-text');
-
-        const file = fileInput.files[0];
-
-        if (file) {
-            const fileType = file.type;
-            const fileURL = URL.createObjectURL(file);
-
-            previewContainer.style.display = 'block';
-            
-            // Reset Tampilan
-            previewImage.style.display = 'none';
-            previewPdf.style.display = 'none';
-            previewText.style.display = 'none';
-
-            if (fileType.match('image.*')) {
-                previewImage.src = fileURL;
-                previewImage.style.display = 'inline-block';
-            } else if (fileType === 'application/pdf') {
-                previewPdf.src = fileURL;
-                previewPdf.style.display = 'block';
-            } else {
-                previewText.innerHTML = '<i class="bi bi-file-earmark-break display-4 text-warning"></i><br>Preview tidak tersedia.<br>File: <b>' + file.name + '</b>';
-                previewText.style.display = 'block';
-            }
+    function previewFile() {
+        const file = document.getElementById('fileInput').files[0];
+        if (file && file.type === 'application/pdf') {
+            const url = URL.createObjectURL(file);
+            $('#preview-pdf').attr('src', url).show();
+            $('#preview-container').show();
         }
     }
 
-    function resetFile() {
-        const fileInput = document.getElementById('fileInput');
-        const previewContainer = document.getElementById('preview-container');
-        
-        fileInput.value = ''; 
-        previewContainer.style.display = 'none'; 
+    function resetFileInput() {
+        document.getElementById('fileInput').value = '';
+        $('#preview-container').hide();
+        $('#preview-pdf').attr('src', '');
     }
 </script>
 @endpush

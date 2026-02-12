@@ -21,60 +21,63 @@ class DashboardController extends Controller
         // ====================================================================
         // 1. PENGAMBILAN DATA SURAT MASUK (ALL SOURCES)
         // ====================================================================
+// ====================================================================
+// 1. PENGAMBILAN DATA SURAT MASUK (DENGAN FILTER PIMPINAN)
+// ====================================================================
 
-// A. SURAT MASUK EKSTERNAL (Hanya yang sudah diteruskan BAU ke Satker)
+$isPimpinan = ($user->role == 'pimpinan');
+
+// A. SURAT MASUK EKSTERNAL
 $suratEksternal = Surat::with(['riwayats'])->select('id', 'diterima_tanggal', 'tanggal_surat', 'perihal', 'nomor_surat', 'surat_dari', 'tipe_surat', 'status')
-    ->where(function($q) use ($satkerId, $user) {
-        // Filter: Hanya tampil jika Satker adalah tujuan disposisi
-        $q->whereHas('disposisis', function ($sq) use ($satkerId) {
-            $sq->where('tujuan_satker_id', $satkerId);
-        })
-        // Atau jika tujuan surat memang langsung ke Satker tersebut
-        ->orWhere('tujuan_satker_id', $satkerId)
-        // Atau surat yang diinput oleh user Satker itu sendiri
-        ->orWhere('user_id', $user->id);
+    ->where(function($q) use ($satkerId, $user, $isPimpinan) {
+        if ($isPimpinan) {
+            // Pimpinan hanya melihat yang ditujukan ke USER ID-nya
+            $q->where('tujuan_user_id', $user->id);
+        } else {
+            // Admin TU melihat semua disposisi ke Satker atau tujuan Satker
+            $q->whereHas('disposisis', function ($sq) use ($satkerId) {
+                $sq->where('tujuan_satker_id', $satkerId);
+            })
+            ->orWhere('tujuan_satker_id', $satkerId)
+            ->orWhere('user_id', $user->id);
+        }
     })
     ->where(function($q) {
-        $q->where('tipe_surat', '!=', 'internal')
-          ->orWhereNull('tipe_surat');
+        $q->where('tipe_surat', '!=', 'internal')->orWhereNull('tipe_surat');
     })
-    // PERBAIKAN BUG:
-    // Kecualikan status 'didisposisi' karena itu posisi surat masih di BAU (belum diteruskan)
-    // Gunakan status yang menandakan surat sudah resmi di tangan Satker
     ->whereIn('status', ['di_satker', 'arsip_satker', 'diarsipkan', 'selesai_edaran','selesai'])
     ->get();
 
-        // B. SURAT EDARAN
-        $satker = Satker::find($satkerId);
-        $suratEdaran = $satker->suratEdaran()
-            ->select('surats.id', 'surats.diterima_tanggal', 'surats.tanggal_surat', 'surats.perihal', 'surats.nomor_surat', 'surats.surat_dari', 'surats.tipe_surat')
-            ->get();
-
-      // C. SURAT MASUK INTERNAL (OTOMATIS - Dari Satker Lain atau Rektor)
+// B. SURAT MASUK INTERNAL (OTOMATIS)
 $suratMasukInternalOtomatis = SuratKeluar::with('user.satker')
-    // TAMBAHKAN 'tanggal_terusan' di sini
     ->select('id', 'tanggal_surat', 'perihal', 'nomor_surat', 'user_id', 'created_at', 'status', 'tanggal_terusan') 
     ->where('tipe_kirim', 'internal')
     ->whereHas('penerimaInternal', function($q) use ($satkerId) {
         $q->where('satkers.id', $satkerId);
     })
-    ->where(function($q) {
-        $q->where(function($sq) {
-            $sq->whereHas('user', function($u) {
-                $u->where('role', 'admin_rektor');
-            })->where('status', 'selesai'); 
-        })
-        ->orWhereHas('user', function($u) {
-            $u->where('role', '!=', 'admin_rektor');
-        });
+    // FILTER UNTUK PIMPINAN: Melalui relasi ke tabel 'surats'
+    ->whereHas('surats', function($q) use ($user, $isPimpinan) {
+        if ($isPimpinan) {
+            // Pimpinan hanya melihat yang penerimanya adalah dirinya sendiri
+            $q->where('tujuan_user_id', $user->id);
+        } else {
+            // Admin TU melihat yang tujuannya adalah role admin atau pimpinan di unit itu
+            $q->whereHas('penerima', function($u) {
+                $u->whereIn('role', ['admin_satker', 'pimpinan']); 
+            });
+        }
     })
     ->get();
 
-        // D. SURAT MASUK INTERNAL (MANUAL)
-        $suratMasukInternalManual = Surat::select('id', 'diterima_tanggal', 'tanggal_surat', 'perihal', 'nomor_surat', 'surat_dari', 'tipe_surat')
-            ->where('tipe_surat', 'internal')
-            ->where('tujuan_satker_id', $satkerId)
-            ->get();
+// D. SURAT MASUK INTERNAL (MANUAL)
+$suratMasukInternalManual = Surat::select('id', 'diterima_tanggal', 'tanggal_surat', 'perihal', 'nomor_surat', 'surat_dari', 'tipe_surat')
+    ->where('tipe_surat', 'internal')
+    ->where('tujuan_satker_id', $satkerId)
+    ->when($isPimpinan, function($q) use ($user) {
+        // Jika pimpinan, filter lagi berdasarkan user_id
+        return $q->where('tujuan_user_id', $user->id);
+    })
+    ->get();
 
 
         // ====================================================================
@@ -135,7 +138,6 @@ $formatData = function($item, $tipeLabel) use ($user) {
 
         // Merge Semua
         $allSuratMasuk = $allSuratMasuk->merge($suratEksternal->map(fn($i) => $formatData($i, 'eksternal')));
-        $allSuratMasuk = $allSuratMasuk->merge($suratEdaran->map(fn($i) => $formatData($i, 'eksternal')));
         $allSuratMasuk = $allSuratMasuk->merge($suratMasukInternalOtomatis->map(fn($i) => $formatData($i, 'internal')));
         $allSuratMasuk = $allSuratMasuk->merge($suratMasukInternalManual->map(fn($i) => $formatData($i, 'internal')));
 

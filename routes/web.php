@@ -2,6 +2,7 @@
 
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Auth;
+use App\Http\Controllers\Satker\PimpinanValidasiController;
 
 // Import Controller Utama
 use App\Http\Controllers\HomeController;
@@ -44,7 +45,8 @@ Route::get('/', function () {
 
 Auth::routes(['register' => false]);
 Route::get('/home', [HomeController::class, 'index'])->name('home');
-
+// Letakkan di bagian rute publik
+Route::get('/v/{hash}', [App\Http\Controllers\Public\VerifikasiController::class, 'index'])->name('verifikasi.surat');
 // ===================================================================
 // GRUP UTAMA: SEMUA RUTE YANG MEMERLUKAN LOGIN
 // ===================================================================
@@ -60,8 +62,8 @@ Route::get('/cetak/disposisi-satker/{id}', [CetakController::class, 'cetakDispos
 
 
 
-    // --- GRUP UNTUK ADMIN BAU ---
-    Route::middleware(['auth', 'role:bau'])->prefix('bau')->name('bau.')->group(function () {
+    // --- GRUP UNTUK ADMIN BAU & PIMPINAN (Kepala BAU) ---
+    Route::middleware(['auth', 'role:bau,pimpinan'])->prefix('bau')->name('bau.')->group(function () {
 
         // 1. SURAT MASUK
         Route::prefix('surat')->name('surat.')->group(function () {
@@ -155,8 +157,8 @@ Route::get('/surat-internal-rektor', [SuratKeluarInternalRektorController::class
     });
 
 
-    // --- GRUP UNTUK ADMIN REKTOR ---
-    Route::prefix('admin-rektor')->name('adminrektor.')->group(function () {
+    // --- GRUP UNTUK ADMIN REKTOR & PIMPINAN (Rektor) ---
+    Route::prefix('admin-rektor')->name('adminrektor.')->middleware(['auth', 'role:admin_rektor,pimpinan'])->group(function () {
         
         // Surat Masuk
         Route::get('/surat-masuk', [AdminRektorSuratMasukController::class, 'index'])->name('suratmasuk.index');
@@ -169,13 +171,6 @@ Route::get('/surat-internal-rektor', [SuratKeluarInternalRektorController::class
         Route::get('/riwayat-disposisi/export', [DisposisiController::class, 'exportRiwayat'])->name('disposisi.riwayat.export');
         Route::get('/riwayat-disposisi/detail/{id}', [DisposisiController::class, 'detail'])->name('disposisi.riwayat.detail');
         
-        // Surat Keluar (Perbaikan: Menggunakan Controller Spesifik)
-        // Jika Anda punya Controller umum, pastikan importnya benar. 
-        // Tapi di bawah Anda mendefinisikan Resource, jadi route manual ini mungkin duplikat/salah import.
-        // Saya disable route manual yang menyebabkan error "Class not exist"
-        // Route::get('/surat-keluar', [AdminRektorSuratKeluarController::class, 'index'])->name('suratkeluar.index');
-        // Route::get('/surat-keluar/create', [AdminRektorSuratKeluarController::class, 'create'])->name('suratkeluar.create');
-
         // Surat Keluar Internal
         Route::get('/surat-keluar-internal', [App\Http\Controllers\AdminRektor\SuratKeluarInternalController::class, 'indexInternal'])->name('suratkeluar.internal');
         Route::resource('surat-keluar-internal', App\Http\Controllers\AdminRektor\SuratKeluarInternalController::class);
@@ -200,13 +195,26 @@ Route::get('/surat-internal-rektor', [SuratKeluarInternalRektorController::class
     });
 
 
-    // --- GRUP UNTUK ADMIN SATKER ---
-    Route::prefix('satker')->name('satker.')->middleware(['auth', 'role:satker'])->group(function () {
+    // --- GRUP UNTUK ADMIN SATKER & PIMPINAN (Dekan/Kabiro/Warek/Wadek) ---
+    // Note: Middleware menggunakan role 'admin_satker' dan 'pimpinan' sesuai data terbaru
+    Route::prefix('satker')->name('satker.')->middleware(['auth', 'role:admin_satker,pimpinan'])->group(function () {
+        
+        Route::get('/dashboard', [SatkerDashboardController::class, 'index'])->name('dashboard');
+
 Route::post('submit-delegasi-internal', [SatkerSuratInternalController::class, 'delegate'])
         ->name('surat-masuk.internal.delegate');
         // --- SURAT KELUAR INTERNAL ---
         Route::get('/surat-keluar-internal/export', [SatkerSuratInternalController::class, 'exportKeluar'])
             ->name('surat-keluar.internal.export');
+            // Pastikan name-nya persis seperti ini
+// Route::post('/satker/surat-keluar-internal/editor/{id}/simpan', [SuratKeluarController::class, 'processSignature'])
+//      ->name('satker.surat-keluar.internal.process');
+Route::get('/surat-keluar-internal/editor/{id}', [SatkerSuratInternalController::class, 'editorLayout'])->name('surat-keluar.internal.editor');
+Route::post('/surat-keluar-internal/editor/{id}/simpan', [SatkerSuratInternalController::class, 'processSignature'])->name('surat-keluar.internal.process');
+Route::post('/surat-templates/store', [SatkerSuratInternalController::class, 'storeTemplate'])->name('surat-templates.store');
+Route::delete('/surat-templates/{id}', [SatkerSuratInternalController::class, 'destroyTemplate'])->name('surat-templates.destroy');
+Route::post('/surat-keluar-internal/resend/{id}', [SatkerSuratInternalController::class, 'resend'])
+    ->name('satker.surat-keluar.internal.resend');
         
         // ====================================================
         // [PERBAIKAN] RUTE LOG / RIWAYAT KHUSUS SATKER
@@ -266,6 +274,10 @@ Route::post('/surat-masuk-eksternal/{surat}/delegasi', [SatkerSuratController::c
             Route::get('/', [App\Http\Controllers\Satker\SuratKeluarEksternalController::class, 'index'])->name('index');
             Route::get('/create', [App\Http\Controllers\Satker\SuratKeluarEksternalController::class, 'create'])->name('create');
             Route::post('/', [App\Http\Controllers\Satker\SuratKeluarEksternalController::class, 'store'])->name('store');
+            // --- TAMBAHKAN DUA RUTE INI DI SINI ---
+    Route::get('/{id}/bubuhkan-ttd', [App\Http\Controllers\Satker\SuratKeluarEksternalController::class, 'bubuhkanTtd'])->name('bubuhkan-ttd');
+    Route::post('/{id}/process', [App\Http\Controllers\Satker\SuratKeluarEksternalController::class, 'processSignature'])->name('process');
+    // --------------------------------------
             Route::get('/{surat}/edit', [App\Http\Controllers\Satker\SuratKeluarEksternalController::class, 'edit'])->name('edit');
             Route::put('/{surat}', [App\Http\Controllers\Satker\SuratKeluarEksternalController::class, 'update'])->name('update');
             Route::delete('/{surat}', [App\Http\Controllers\Satker\SuratKeluarEksternalController::class, 'destroy'])->name('destroy');
@@ -273,16 +285,37 @@ Route::post('/surat-masuk-eksternal/{surat}/delegasi', [SatkerSuratController::c
 
        
     });
-    Route::get('/get-pegawai-by-satker', function (Request $request) {
-    $pegawai = \App\Models\User::where('satker_id', $request->satker_id)
-                ->where('role', 'pegawai')
-                ->get(['id', 'name']);
-    return response()->json($pegawai);
+
+    // rute untukmenambil nama pimpinan atau pegawai berdasarkan fakultas atau satkernya
+ Route::get('/get-pegawai-by-satker', function (Request $request) {
+    $satkerId = $request->satker_id;
+    
+    // Ambil semua user di satker tersebut (Pimpinan & Pegawai)
+    // Kita urutkan pimpinan di atas agar mudah ditemukan
+    $users = \App\Models\User::where('satker_id', $satkerId)
+                ->where('is_active', 1)
+                ->orderByRaw("FIELD(role, 'pimpinan', 'admin_satker', 'pegawai')")
+                ->get(['id', 'name', 'role', 'jabatan_id']);
+                
+    // Kita tambahkan label jabatan agar Admin tidak bingung (misal: "Budi (Dekan)")
+    $results = $users->map(function($user) {
+        $jabatan = $user->jabatan ? $user->jabatan->nama_jabatan : ucfirst($user->role);
+        return [
+            'id'   => $user->id,
+            'name' => $user->name . " (" . $jabatan . ")",
+            'role' => $user->role
+        ];
+    });
+
+    return response()->json($results);
 })->name('api.get-pegawai-by-satker');
 
 
-    // --- GRUP UNTUK PEGAWAI ---
-    Route::prefix('pegawai')->name('pegawai.')->group(function () {
+    // --- GRUP UNTUK PEGAWAI & PIMPINAN (Warek/Wadek) ---
+    Route::prefix('pegawai')->name('pegawai.')->middleware(['auth', 'role:pegawai,pimpinan'])->group(function () {
+        
+        Route::get('/dashboard', [PegawaiDashboardController::class, 'index'])->name('dashboard');
+
 // Surat Pribadi (Internal & Eksternal yang didelegasikan ke user)
     Route::get('surat-masuk/pribadi', [SuratMasukPribadiController::class, 'indexPribadiIntEks'])->name('surat.pribadi');
     Route::post('surat-masuk/pribadi/{surat}/selesai', [SuratMasukPribadiController::class, 'selesai'])->name('surat.selesai');
@@ -297,6 +330,17 @@ Route::post('surat-pribadi/terima/{id}', [SuratMasukPribadiController::class, 't
     });
  
     
+    // --- RUTE KHUSUS VALIDASI PIMPINAN (MENGETAHUI) ---
+Route::group(['prefix' => 'pimpinan', 'as' => 'pimpinan.', 'middleware' => ['auth']], function () {
+    // Arahkan ke Controller baru
+    Route::get('/validasi-surat', [PimpinanValidasiController::class, 'index'])->name('validasi.index');
+    Route::post('/validasi-surat/{id}/proses', [PimpinanValidasiController::class, 'update'])->name('validasi.update');
+    
+});
+
+Route::get('/tembusan-surat', [App\Http\Controllers\Satker\PimpinanValidasiController::class, 'indexTembusan'])
+    ->name('surat.tembusan.index')
+    ->middleware('auth');
 
 
 });

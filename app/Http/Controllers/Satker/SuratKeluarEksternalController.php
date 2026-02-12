@@ -8,6 +8,8 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use App\Models\SuratKeluar; // <--- PAKAI MODEL INI
 use App\Models\RiwayatSurat; // Jika ingin mencatat log aktivitas user
+use App\Models\User;      // Pastikan Model User diimport
+use App\Models\Satker;
 
 // === IMPORT LIBRARY EXCEL ===
 use Maatwebsite\Excel\Facades\Excel;
@@ -17,6 +19,7 @@ use Maatwebsite\Excel\Concerns\WithMapping;
 use Maatwebsite\Excel\Concerns\ShouldAutoSize;
 use Maatwebsite\Excel\Concerns\WithStyles;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
+use Illuminate\Support\Str;
 
 class SuratKeluarEksternalController extends Controller
 {
@@ -114,42 +117,103 @@ class SuratKeluarEksternalController extends Controller
         return Excel::download($export, 'Laporan_Surat_Keluar_Eksternal_' . date('d-m-Y_H-i') . '.xlsx');
     }
 
-    public function create()
+public function create()
     {
-        return view('satker.surat_keluar_eksternal.create');
+        // 1. Ambil semua user dengan role 'pimpinan' untuk pilihan "Mengetahui"
+        // Kita juga melakukan eager loading 'jabatan' agar tidak error saat memanggil $p->jabatan->nama_jabatan
+        $pimpinans = User::with('jabatan')
+            ->where('role', 'pimpinan')
+            ->get();
+
+        // 2. Ambil semua Satker untuk pilihan "Tembusan Tambahan"
+        $satkers = Satker::all();
+
+        // 3. Kirim kedua variabel tersebut ke view
+        return view('satker.surat_keluar_eksternal.create', compact('pimpinans', 'satkers'));
     }
 
   public function store(Request $request)
 {
-    // 1. Validasi
+    // 1. Validasi (Tetap sesuai kode Anda)
     $request->validate([
-        // Tambahkan aturan unique untuk tabel surat_keluars kolom nomor_surat
         'nomor_surat'   => 'required|string|max:255|unique:surat_keluars,nomor_surat',
         'tujuan_luar'   => 'required|string|max:255',
         'perihal'       => 'required|string|max:255',
         'tanggal_surat' => 'required|date',
         'file_surat'    => 'required|file|mimes:pdf,jpg,png|max:10240',
     ], [
-        // Custom Error Message (Opsional)
         'nomor_surat.unique' => 'Nomor surat ini sudah terdaftar. Mohon gunakan nomor lain.',
     ]);
 
     $user = Auth::user();
     $path = $request->file('file_surat')->store('surat_keluar_eksternal_satker', 'public');
 
-    // 2. Simpan Data
-    SuratKeluar::create([
+    // 2. Simpan Data Utama (Simpan ke variabel $surat agar kita punya ID-nya)
+    $surat = SuratKeluar::create([
         'user_id'       => $user->id,
         'nomor_surat'   => $request->nomor_surat,
         'perihal'       => $request->perihal,
         'tanggal_surat' => $request->tanggal_surat,
         'file_surat'    => $path,
         'tipe_kirim'    => 'eksternal',
-        'tujuan_luar'   => $request->tujuan_luar
+        'tujuan_luar'   => $request->tujuan_luar,
+        'status'        => 'Draft', // Beri status Draft dulu sebelum diatur barcodenya
+        'qrcode_hash' => Str::random(40), // Pastikan ini diisi
+
     ]);
 
-    return redirect()->route('satker.surat-keluar.eksternal.index')
-                     ->with('success', 'Surat keluar eksternal berhasil dibuat.');
+   // 3. Simpan Relasi Pimpinan (Mengetahui) jika ada
+if ($request->has('pimpinan_ids')) {
+    $pimpinanData = [];
+    foreach ($request->pimpinan_ids as $pimpinanId) {
+        $pimpinanData[] = [
+            'pimpinan_id' => $pimpinanId,
+            'status'      => 'pending',
+            'created_at'  => now(),
+            'updated_at'  => now(),
+        ];
+    }
+    
+    // Gunakan createMany karena relasinya adalah hasMany
+    $surat->validasis()->createMany($pimpinanData);
+}
+
+// 4. LOGIKA TEMBUSAN (BAU OTOMATIS)
+    // Ambil pilihan dari form (jika ada), kalau kosong buat array kosong
+    $pilihanTembusan = $request->tembusan_ids ?? [];
+
+    // Cari ID Satker BAU
+    $bau = \App\Models\Satker::where('nama_satker', 'Biro Administrasi Umum (BAU)')->first();
+    
+    // Tambahkan BAU ke dalam daftar antrean simpan jika ditemukan
+    if ($bau) {
+        $idBauTag = 'satker_' . $bau->id;
+        if (!in_array($idBauTag, $pilihanTembusan)) {
+            $pilihanTembusan[] = $idBauTag;
+        }
+    }
+
+    // Proses Simpan ke tabel surat_tembusans
+    foreach ($pilihanTembusan as $val) {
+        $dataTembusan = [
+            'surat_keluar_id' => $surat->id,
+            'user_id'         => null,
+            'satker_id'       => null,
+        ];
+
+        if (str_starts_with($val, 'user_')) {
+            $dataTembusan['user_id'] = str_replace('user_', '', $val);
+        } elseif (str_starts_with($val, 'satker_')) {
+            $dataTembusan['satker_id'] = str_replace('satker_', '', $val);
+        }
+
+        // Simpan hanya jika ada ID yang valid
+        if ($dataTembusan['user_id'] || $dataTembusan['satker_id']) {
+            \App\Models\SuratTembusan::create($dataTembusan);
+        }
+    }
+// Di method store
+return redirect()->route('satker.surat-keluar.eksternal.bubuhkan-ttd', $surat->id);
 }
 
     public function edit(SuratKeluar $surat)
@@ -205,5 +269,229 @@ public function destroy(SuratKeluar $surat)
     $surat->delete(); 
 
     return redirect()->back()->with('success', 'Surat berhasil dipindahkan ke tempat sampah.');
+}
+
+public function bubuhkanTtd($id)
+{
+    $surat = SuratKeluar::findOrFail($id);
+    
+    // Pastikan view diarahkan ke folder eksternal yang baru kita buat
+    return view('satker.surat_keluar_eksternal.bubuhkan_ttd', compact('surat'));
+}
+
+public function processSignature(Request $request, $id)
+{
+    // 1. Inisialisasi Data
+    $surat = SuratKeluar::findOrFail($id);
+    $user = Auth::user();
+    $satker = $user->satker;
+
+    $positions = json_decode($request->positions, true);
+    $canvasW = floatval($positions['width']);
+    $canvasH = floatval($positions['height']);
+
+    // 2. Siapkan Path File & Logo
+    $sourceFile = storage_path('app/public/' . $surat->file_surat);
+    $tempQrLegalPath = storage_path('app/public/temp_qr_legal_ext_' . $id . '.png');
+    $tempQrTtdPath = storage_path('app/public/temp_qr_ttd_ext_' . $id . '.png');
+    $logoPath = ($satker && $satker->logo_satker) ? storage_path('app/public/' . $satker->logo_satker) : null;
+
+  // --- A. Generate QR Barcode ---
+
+// Pastikan hash tersedia, jika null/kosong maka generate otomatis sekarang
+if (empty($surat->qrcode_hash)) {
+    $surat->qrcode_hash = \Illuminate\Support\Str::random(40);
+    $surat->save();
+}
+
+// Sekarang variabel $surat->qrcode_hash dijamin sudah ada isinya (string)
+\App\Helpers\BarcodeHelper::generateQrWithLogo(
+    (string) $surat->qrcode_hash, 
+    $logoPath, 
+    $tempQrLegalPath, 
+    true
+);
+
+$ttdData = "DOKUMEN DITANDATANGANI SECARA DIGITAL\nNama : " . $user->name . "\nNIP  : " . ($user->nip ?? '-');
+\App\Helpers\BarcodeHelper::generateQrWithLogo($ttdData, $logoPath, $tempQrTtdPath, false);
+
+    // 3. Inisialisasi FPDI & Proses Stamping
+    $pdf = new \setasign\Fpdi\Fpdi();
+    if (!file_exists($sourceFile)) return back()->with('error', 'File sumber tidak ditemukan.');
+    
+    $pageCount = $pdf->setSourceFile($sourceFile);
+
+    for ($pageNo = 1; $pageNo <= $pageCount; $pageNo++) {
+        $templateId = $pdf->importPage($pageNo);
+        $size = $pdf->getTemplateSize($templateId);
+        $pdf->AddPage($size['orientation'], [$size['width'], $size['height']]);
+        $pdf->useTemplate($templateId);
+
+        $ratioX = $size['width'] / $canvasW;
+        $ratioY = $size['height'] / $canvasH;
+
+        if (isset($positions['pages'][$pageNo])) {
+            $state = $positions['pages'][$pageNo];
+            // Barcode TTD
+            if (isset($state['ttd']) && $state['ttd']['show'] && file_exists($tempQrTtdPath)) {
+                $pdf->Image($tempQrTtdPath, floatval($state['ttd']['x']) * $ratioX, floatval($state['ttd']['y']) * $ratioY, 25, 25);
+            }
+            // Barcode Keabsahan
+            if (isset($state['qr']) && $state['qr']['show'] && file_exists($tempQrLegalPath)) {
+                $pdf->Image($tempQrLegalPath, floatval($state['qr']['x']) * $ratioX, floatval($state['qr']['y']) * $ratioY, 25, 25);
+            }
+        }
+    }
+
+    // 4. Simpan File Final
+    $fileName = 'FINAL_EXT_' . time() . '_' . basename($surat->file_surat);
+    $savePath = 'surat_keluar_eksternal_satker/' . $fileName;
+    $pdf->Output(storage_path('app/public/' . $savePath), 'F');
+
+    // Hapus Temp
+    if (file_exists($tempQrLegalPath)) unlink($tempQrLegalPath);
+    if (file_exists($tempQrTtdPath)) unlink($tempQrTtdPath);
+
+   // 5. Update Status & Cek Alur Validasi
+    // Cek apakah ada data di tabel validasi untuk surat ini
+    $hasPimpinan = $surat->validasis()->exists(); 
+    
+    // Jika ada pimpinan, status 'Menunggu Validasi'. Jika kosong, langsung 'Terkirim'.
+    $statusBaru = $hasPimpinan ? 'Menunggu Validasi' : 'Terkirim';
+
+    $surat->update([
+        'file_surat' => $savePath,
+        'status' => $statusBaru,
+        'is_final' => 1
+    ]);
+
+    // 6. LOGIKA NOTIFIKASI & DISTRIBUSI
+    if ($hasPimpinan) {
+        // --- JIKA ADA PIMPINAN (MENGETAHUI) ---
+        $pimpinanIds = $surat->validasis()->pluck('pimpinan_id')->toArray();
+        
+        \App\Helpers\EmailHelper::kirimNotif($pimpinanIds, [
+            'subject' => 'Perlu Validasi: ' . $surat->perihal,
+            'body' => "Surat eksternal dari " . ($satker->nama_satker ?? $user->name) . " memerlukan validasi Anda.",
+            'actiontext' => 'Validasi Sekarang',
+            'actionurl' => route('login'),
+            'file_url' => asset('storage/' . $savePath)
+        ]);
+        
+        $msg = 'Surat berhasil disimpan dan menunggu validasi pimpinan.';
+    } else {
+        // --- JIKA KOSONG (LANGSUNG KE BAU & TEMBUSAN LAIN) ---
+        $this->distribusiKeTembusan($surat);
+        $msg = 'Surat berhasil dikirim (Tembusan otomatis ke BAU).';
+    }
+
+return redirect()->route('satker.surat-keluar.eksternal.index')->with('success', $msg);
+}
+
+
+// api keabsahan
+private function daftarkanKeabsahanKeAPI($surat)
+{
+    $apiUrl = 'https://docverify.wiraraja.ac.id/api/createv2.php';
+    $apiKey = 'c3a8f5d7e9b4c2a1c3a8f5d7e9b4c2a1c3a8f5d7e9b4c2a1c3a8f5d7e9b4c2a1';
+
+    // Sesuaikan data berdasarkan model SuratKeluar Anda
+    $postData = [
+        'token_code'      => 'bapsi2026', 
+        'document_number' => $surat->nomor_surat,
+        'document_type'   => 'Surat Keluar Eksternal',
+        'title'           => $surat->perihal,
+        'issued_date'     => $surat->tanggal_surat,
+        'issued_by'       => $surat->user->satker->nama_satker ?? 'Universitas Wiraraja',
+        'owner_name'      => $surat->user->name,
+        'pdf_path'        => 'storage/' . $surat->file_surat
+    ];
+
+    try {
+        $response = Http::withHeaders([
+            'X-API-KEY' => $apiKey,
+            'Accept'    => 'application/json'
+        ])->asForm()->post($apiUrl, $postData);
+
+        if ($response->successful()) {
+            $result = $response->json();
+            // Simpan token verifikasi dari API ke database jika diperlukan
+            $surat->update([
+                'verifikasi_url' => $result['data']['verify_url'] ?? null
+            ]);
+            return true;
+        }
+        
+        return false;
+    } catch (\Exception $e) {
+        \Log::error('API Keabsahan Error: ' . $e->getMessage());
+        return false;
+    }
+}
+
+
+
+/**
+ * Method Helper untuk Distribusi ke Tembusan (BAU & Unit Lain)
+ */
+private function distribusiKeTembusan($surat)
+{
+    $user = Auth::user();
+    $namaPengirim = $user->satker->nama_satker ?? $user->name;
+    $penerimaUserIds = [];
+
+    // 1. Ambil semua data dari satu tabel tembusans
+    $semuaTembusan = $surat->tembusans;
+
+    foreach ($semuaTembusan as $t) {
+        if ($t->user_id) {
+            // Jika tembusan langsung ke User
+            $penerimaUserIds[] = $t->user_id;
+        } elseif ($t->satker_id) {
+            // Jika tembusan ke Satker, ambil User pertama dari satker tersebut
+            $adminSatker = \App\Models\User::where('satker_id', $t->satker_id)->first();
+            if ($adminSatker) {
+                $penerimaUserIds[] = $adminSatker->id;
+            }
+        }
+    }
+
+    // 2. OTOMATIS: Tambahkan BAU (Wajib)
+    $bau = \App\Models\Satker::where('nama_satker', 'BAU')->first();
+    if ($bau) {
+        $adminBau = \App\Models\User::where('satker_id', $bau->id)->first();
+        if ($adminBau) {
+            $penerimaUserIds[] = $adminBau->id;
+        }
+    }
+
+    // 3. Bersihkan duplikat ID
+    $finalUserIds = array_unique($penerimaUserIds);
+
+    // 4. Proses simpan ke Inbox (Tabel Surat Masuk)
+    foreach ($finalUserIds as $targetUid) {
+        \App\Models\Surat::create([
+            'surat_dari'      => $namaPengirim,
+            'tipe_surat'      => 'eksternal',
+            'nomor_surat'     => $surat->nomor_surat,
+            'tanggal_surat'   => $surat->tanggal_surat,
+            'perihal'         => $surat->perihal,
+            'sifat'           => 'Biasa',
+            'no_agenda'       => 'EXT-' . strtoupper(uniqid()),
+            'diterima_tanggal'=> now(),
+            'file_surat'      => $surat->file_surat,
+            'status'          => 'proses',
+            'user_id'         => $user->id,
+            'tujuan_user_id'  => $targetUid,
+        ]);
+        
+        // Kirim Email Notifikasi
+        \App\Helpers\EmailHelper::kirimNotif([$targetUid], [
+            'subject' => 'Tembusan Surat Eksternal: ' . $surat->perihal,
+            'body'    => "Anda menerima tembusan surat dari " . $namaPengirim,
+            'actiontext' => 'Buka Surat',
+            'actionurl'  => route('login')
+        ]);
+    }
 }
 }

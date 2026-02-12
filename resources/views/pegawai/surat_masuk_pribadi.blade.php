@@ -3,183 +3,169 @@
 @push('styles')
 <link href="https://cdn.datatables.net/v/bs5/dt-2.1.0/b-3.1.1/b-html5-3.1.1/datatables.min.css" rel="stylesheet">
 <style>
-    #tabelSuratMasuk_wrapper { font-size: 13px; }
-    .badge-menunggu { background-color: #fff3cd; color: #856404; border: 1px solid #ffeeba; }
+    /* Styling Tabel & Font */
+    #tabelSuratMasuk { font-size: 0.875rem; border-collapse: separate; border-spacing: 0 8px; }
+    #tabelSuratMasuk thead th { border: none; background-color: #f8f9fa; color: #495057; text-transform: uppercase; letter-spacing: 0.5px; font-size: 0.75rem; padding: 12px; }
+    #tabelSuratMasuk tbody tr { background-color: #ffffff; box-shadow: 0 2px 4px rgba(0,0,0,0.02); transition: all 0.2s ease; border-radius: 8px; }
+    #tabelSuratMasuk tbody tr:hover { transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,0.05); background-color: #fcfcfc; }
+    #tabelSuratMasuk tbody td { border: none; padding: 12px; vertical-align: middle; }
+    #tabelSuratMasuk tbody td:first-child { border-top-left-radius: 8px; border-bottom-left-radius: 8px; }
+    #tabelSuratMasuk tbody td:last-child { border-top-right-radius: 8px; border-bottom-right-radius: 8px; }
+
+    /* Custom Badges */
+    .badge-status { font-weight: 500; letter-spacing: 0.3px; border-radius: 6px; padding: 6px 12px; }
+    .badge-tipe { border-radius: 50px; padding: 4px 12px; font-weight: 600; font-size: 10px; }
+    
+    /* Layout */
+    .filter-card { border-radius: 12px; background: #fff; }
+    /* .btn-icon { width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center; padding: 0; } */
 </style>
 @endpush
 
 @section('content')
-<div class="container-fluid px-4">
-    {{-- Alert Flash Message --}}
+<div class="container-fluid px-2 py-3">
+
+    {{-- Alert Section --}}
     @if(session('success'))
-        <div class="alert alert-success alert-dismissible fade show border-0 shadow-sm mb-3" role="alert">
-            <div class="d-flex">
-                <i class="bi bi-check-circle-fill me-2"></i>
-                <div>
-                    <strong>Berhasil!</strong> {{ session('success') }}
-                </div>
+        <div class="alert alert-success alert-dismissible fade show border-0 shadow-sm mb-4" role="alert" style="border-left: 4px solid #198754 !important;">
+            <div class="d-flex align-items-center">
+                <i class="bi bi-check-circle-fill me-2 fs-5"></i>
+                <div>{{ session('success') }}</div>
             </div>
             <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
         </div>
     @endif
 
-    @if(session('error'))
-        <div class="alert alert-danger alert-dismissible fade show border-0 shadow-sm mb-3" role="alert">
-            <div class="d-flex">
-                <i class="bi bi-exclamation-triangle-fill me-2"></i>
-                <div>
-                    <strong>Gagal!</strong> {{ session('error') }}
+    <div class="card filter-card shadow-sm border-0 mb-4">
+        <div class="card-body p-4">
+            <form method="GET" action="{{ route('pegawai.surat.pribadi') }}" class="row g-3 align-items-end">
+                <div class="col-lg-3 col-md-6">
+                    <label class="form-label small fw-bold text-secondary">Rentang Tanggal</label>
+                    <div class="input-group input-group-sm">
+                        <input type="date" name="from" value="{{ request('from') }}" class="form-control border-end-0" title="Dari Tanggal">
+                        <span class="input-group-text bg-white border-start-0 border-end-0 text-muted">-</span>
+                        <input type="date" name="to" value="{{ request('to') }}" class="form-control border-start-0" title="Sampai Tanggal">
+                    </div>
                 </div>
-            </div>
-            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-        </div>
-    @endif
-    <div class="card shadow-sm border-0 mb-4">
-        <div class="card-body">
-            <form method="GET" action="{{ route('pegawai.surat.pribadi') }}" class="row g-2 align-items-end">
-                <div class="col-md-2">
-                    <label class="small fw-bold">Tipe Surat</label>
-                    <select name="tipe" class="form-select form-select-sm">
-                        <option value="">Semua</option>
+                <div class="col-lg-2 col-md-6">
+                    <label class="form-label small fw-bold text-secondary">Tipe Surat</label>
+                    <select name="tipe" class="form-select form-select-sm border-secondary-subtle">
+                        <option value="">Semua Tipe</option>
                         <option value="internal" {{ request('tipe') == 'internal' ? 'selected' : '' }}>Internal</option>
                         <option value="eksternal" {{ request('tipe') == 'eksternal' ? 'selected' : '' }}>Eksternal</option>
                     </select>
                 </div>
-                <div class="col-md-2">
-                    <label class="small fw-bold">Dari</label>
-                    <input type="date" name="from" class="form-control form-control-sm" value="{{ request('from') }}">
-                </div>
-                <div class="col-md-2">
-                    <label class="small fw-bold">Sampai</label>
-                    <input type="date" name="to" class="form-control form-control-sm" value="{{ request('to') }}">
-                </div>
-                <div class="col-md-6">
-                    <button type="submit" class="btn btn-sm btn-primary px-3"><i class="bi bi-filter"></i> Filter</button>
-                    <a href="{{ route('pegawai.surat.pribadi') }}" class="btn btn-sm btn-light border px-3">Reset</a>
-                    <a href="{{ route('pegawai.surat.export', request()->all()) }}" class="btn btn-sm btn-success px-3">
-                        <i class="bi bi-file-earmark-excel"></i> Export CSV
-                    </a>
+                <div class="col-lg-7 col-md-12 text-md-end">
+                    <div class="d-flex flex-wrap gap-2 justify-content-lg-end">
+                        <button type="submit" class="btn btn-sm btn-primary px-4 shadow-sm">
+                            <i class="bi bi-search me-1"></i> Terapkan Filter
+                        </button>
+                        <a href="{{ route('pegawai.surat.pribadi') }}" class="btn btn-sm btn-outline-secondary px-3">
+                            <i class="bi bi-arrow-counterclockwise me-1"></i> Reset
+                        </a>
+                        <a href="{{ route('pegawai.surat.export', request()->all()) }}" class="btn btn-sm btn-success px-3 shadow-sm">
+                            <i class="bi bi-file-earmark-excel me-1"></i> Export .csv
+                        </a>
+                    </div>
                 </div>
             </form>
         </div>
     </div>
 
-    <div class="card shadow-sm border-0">
-        <div class="card-body">
-            <table id="tabelSuratMasuk" class="table table-hover align-middle table-sm w-100">
-                <thead>
-                    <tr class="table-light">
-                        <th>No</th>
-                        <th>Tipe Surat</th>
-                        <th>Asal Surat / Nomor</th>
-                        <th>Perihal</th>
-                        <th>Tgl. Terima</th>
-                        <th>Status</th>
-                        <th class="text-center">Aksi</th>
-                    </tr>
-                </thead>
-                <tbody>
-          @foreach ($suratUntukSaya as $index => $surat)
-    @php
-        $isInternal = ($surat->tipe_label == 'Internal');
-        $logPribadi = $surat->riwayats->where('penerima_id', Auth::id())->first();
-        $catatan = $logPribadi->catatan ?? '-';
-        $statusPenerimaan = $logPribadi ? $logPribadi->is_read : 0; 
-        $riwayatId = $logPribadi ? $logPribadi->id : null;
-        
-        // Kondisi dari Controller
-        $isPerluTerima = $surat->is_perlu_terima;
-    @endphp
-
-    <tr>
-        <td>{{ $index + 1 }}</td>
-        <td><span class="badge {{ $isInternal ? 'bg-info' : 'bg-warning text-dark' }}">{{ $surat->tipe_label }}</span></td>
-        <td>
-            <div class="fw-bold">{{ $surat->surat_dari_display }}</div>
-            <small class="text-muted">{{ $surat->nomor_surat }}</small>
-        </td>
-        <td>{{ $surat->perihal }}</td>
-        <td>{{ \Carbon\Carbon::parse($surat->tgl_display)->isoFormat('D MMM Y') }}</td>
-        <td>
-            @if($isPerluTerima)
-                {{-- Surat Langsung: Ada status Menunggu/Selesai --}}
-                <span class="badge {{ $statusPenerimaan == 2 ? 'bg-success-subtle text-success border border-success' : 'bg-warning-subtle text-warning border border-warning' }} ">
-                    <i class="bi {{ $statusPenerimaan == 2 ? 'bi-check-circle-fill' : 'bi-clock-history' }} me-1"></i>
-                    {{ $statusPenerimaan == 2 ? 'Selesai' : 'Menunggu' }}
-                </span>
-            @else
-                {{-- Surat Hasil Disposisi: Status Delegasi --}}
-                <span class="badge bg-primary-subtle text-primary border border-primary">
-                    <i class="bi bi-person-check-fill me-1"></i> Disposisi
-                </span>
-            @endif
-        </td>
-        <td class="text-center">
-            <div class="d-flex justify-content-center gap-1">
-                {{-- TOMBOL TERIMA: Hanya muncul jika Surat Langsung DAN statusnya masih 0 --}}
-                @if($isPerluTerima && $statusPenerimaan == 0 && $riwayatId)
-                    <form action="{{ route('pegawai.surat.terima-langsung', $riwayatId) }}" method="POST" onsubmit="return confirm('Konfirmasi terima surat?')">
-                        @csrf
-                        <button type="submit" class="btn btn-sm btn-success shadow-sm">
-                            <i class="bi bi-check-lg"></i> Terima
-                        </button>
-                    </form>
-                @endif
-                
-                {{-- TOMBOL LIHAT: Selalu muncul untuk semua --}}
-                <button type="button" class="btn btn-sm btn-info text-white btn-show-detail" 
-                    data-bs-toggle="modal" data-bs-target="#detailSuratModal"
-                    data-tipe="{{ $surat->tipe_label }}" 
-                    data-nomor="{{ $surat->nomor_surat }}"
-                    data-perihal="{{ $surat->perihal }}" 
-                    data-asal="{{ $surat->surat_dari_display }}"
-                    data-tgl-surat="{{ \Carbon\Carbon::parse($surat->tanggal_surat)->isoFormat('D MMMM YYYY') }}" 
-                    data-tgl-terima="{{ \Carbon\Carbon::parse($surat->tgl_display)->isoFormat('D MMMM YYYY') }}"
-                    data-catatan="{{ $catatan }}" 
-                    data-file="{{ $surat->file_surat ? Storage::url($surat->file_surat) : '#' }}">
-                    <i class="bi bi-eye-fill"></i> Lihat
-                </button>
+    <div class="card shadow-sm border-0 shadow-sm" style="border-radius: 12px;">
+        <div class="card-body p-0">
+            <div class="table-responsive p-4">
+                <table id="tabelSuratMasuk" class="table align-middle w-100">
+                    <thead>
+                        <tr>
+                            <th width="50">No</th>
+                            <th width="100">Kategori</th>
+                            <th width="250">Asal & Nomor Surat</th>
+                            <th>Perihal</th>
+                            <th width="120">Tgl. Masuk</th>
+                            <th width="150">Status</th>
+                            <th width="120" class="text-center">Aksi</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach ($suratUntukSaya as $index => $surat)
+                        <tr>
+                            <td class="text-center fw-bold text-muted">{{ $index + 1 }}</td>
+                            <td>
+                                <span class="badge badge-tipe {{ $surat->tipe_label == 'Internal' ? 'bg-info-subtle text-info border border-info' : 'bg-warning-subtle text-warning-emphasis border border-warning' }}">
+                                    {{ strtoupper($surat->tipe_label) }}
+                                </span>
+                            </td>
+                            <td>
+                                <div class="text-dark fw-bold mb-1" style="font-size: 0.9rem;">{{ $surat->surat_dari_display }}</div>
+                                <div class="text-muted" style="font-size: 0.75rem;"><i class="bi bi-hash me-1"></i>{{ $surat->nomor_surat }}</div>
+                            </td>
+                            <td>
+                                <span class="d-inline-block text-truncate fw-medium" style="max-width: 300px;" title="{{ $surat->perihal }}">
+                                    {{ $surat->perihal }}
+                                </span>
+                            </td>
+                            <td class="text-secondary small">
+                                {{ \Carbon\Carbon::parse($surat->tgl_tampil)->isoFormat('DD MMM YYYY') }}
+                            </td>
+                            <td>
+                                @if($surat->is_read_fix == 2)
+                                    <span class="badge badge-status bg-success-subtle text-success border border-success w-100">
+                                        <i class="bi bi-check2-all me-1"></i> Selesai
+                                    </span>
+                                @elseif($surat->is_perlu_terima)
+                                    <span class="badge badge-status bg-warning-subtle text-warning-emphasis border border-warning w-100">
+                                        <i class="bi bi-hourglass-split me-1"></i> Menunggu
+                                    </span>
+                                @else
+                                    <span class="badge badge-status bg-info-subtle text-info border border-info w-100">
+                                        <i class="bi bi-arrow-right-short me-1"></i> Delegasi
+                                    </span>
+                                @endif
+                            </td>
+                            <td>
+                                <div class="d-flex justify-content-center gap-2">
+                                    @if($surat->is_perlu_terima && $surat->is_read_fix < 2 && $surat->riwayat_id_fix)
+                                        <form action="{{ route('pegawai.surat.terima-langsung', $surat->riwayat_id_fix) }}" method="POST" onsubmit="return confirm('Konfirmasi penerimaan surat?')">
+                                            @csrf
+                                            <button type="submit" class="btn btn-sm btn-icon btn-success shadow-sm" title="Terima Surat">
+                                                <i class="bi bi-check-lg"></i>
+                                            </button>
+                                        </form>
+                                    @endif
+                                    
+                                    <button type="button" class="btn btn-sm btn-icon btn-primary shadow-sm btn-show-detail" 
+                                        data-bs-toggle="modal" data-bs-target="#detailSuratModal"
+                                        data-file="{{ $surat->file_surat ? Storage::url($surat->file_surat) : '#' }}"
+                                        title="Pratinjau Surat">
+                                        <i class="bi bi-eye"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                        @endforeach
+                    </tbody>
+                </table>
             </div>
-        </td>
-    </tr>
-@endforeach
-                </tbody>
-            </table>
         </div>
     </div>
 </div>
 
 {{-- MODAL DETAIL --}}
 <div class="modal fade" id="detailSuratModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-xl modal-dialog-centered">
-        <div class="modal-content border-0 shadow">
-            <div class="modal-header bg-primary text-white p-3">
-                <h5 class="modal-title fw-bold"><i class="bi bi-file-earmark-text me-2"></i>Detail Surat <span id="view-tipe"></span></h5>
+    <div class="modal-dialog modal-xl modal-dialog-centered shadow-lg">
+        <div class="modal-content border-0">
+            <div class="modal-header bg-dark text-white p-3">
+                <h6 class="modal-title fw-bold"><i class="bi bi-file-earmark-pdf me-2"></i>Pratinjau Dokumen Surat</h6>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
-            <div class="modal-body p-0">
-                <div class="row g-0">
-                    <div class="col-lg-5 p-4 border-end bg-light">
-                        <h4 class="fw-bold text-primary mb-3" id="view-perihal"></h4>
-                        <hr>
-                        <div class="mb-3"><label class="text-muted small d-block">Nomor</label><span id="view-nomor" class="fw-bold"></span></div>
-                        <div class="mb-3"><label class="text-muted small d-block">Asal</label><span id="view-asal" class="fw-bold"></span></div>
-                        <div class="row mb-3">
-                            <div class="col-6"><label class="text-muted small d-block">Tgl Surat</label><span id="view-tgl-surat" class="fw-bold"></span></div>
-                            <div class="col-6"><label class="text-muted small d-block">Tgl Terima</label><span id="view-tgl-terima" class="fw-bold"></span></div>
-                        </div>
-                        <div class="p-3 bg-white border rounded shadow-sm mb-3">
-                            <label class="text-primary small fw-bold d-block mb-1">Catatan</label>
-                            <p id="view-catatan" class="mb-0 text-dark fst-italic"></p>
-                        </div>
-                        <div class="d-grid mt-4">
-                            <a href="#" id="view-download" class="btn btn-outline-primary rounded-pill" download><i class="bi bi-download me-2"></i>Download</a>
-                        </div>
-                    </div>
-                    <div class="col-lg-7 bg-dark d-flex align-items-center justify-content-center" style="min-height: 500px;">
-                        <div id="view-file-wrapper" class="w-100 h-100"></div>
-                    </div>
+            <div class="modal-body p-0 bg-secondary-subtle">
+                <div id="view-file-wrapper" style="width: 100%; height: 80vh;">
+                    {{-- Iframe loader --}}
                 </div>
+            </div>
+            <div class="modal-footer bg-light py-2">
+                <button type="button" class="btn btn-sm btn-secondary px-4" data-bs-dismiss="modal">Tutup</button>
             </div>
         </div>
     </div>
@@ -191,19 +177,42 @@
 <script src="https://cdn.datatables.net/v/bs5/dt-2.1.0/b-3.1.1/b-html5-3.1.1/datatables.min.js"></script>
 <script>
     $(document).ready(function() {
-        $('#tabelSuratMasuk').DataTable({ language: { search: "Cari:" }, order: [[0, 'asc']] });
+        // DataTable Styling
+        const table = $('#tabelSuratMasuk').DataTable({ 
+            language: { 
+                search: "_INPUT_",
+                searchPlaceholder: "Cari nomor atau perihal...",
+                lengthMenu: "_MENU_ data per halaman",
+                info: "Menampilkan _START_ sampai _END_ dari _TOTAL_ surat",
+                paginate: {
+                    next: '<i class="bi bi-chevron-right"></i>',
+                    previous: '<i class="bi bi-chevron-left"></i>'
+                }
+            },
+            dom: "<'row mb-3'<'col-sm-12 col-md-6'l><'col-sm-12 col-md-6'f>>" +
+                 "<'row'<'col-sm-12'tr>>" +
+                 "<'row mt-3'<'col-sm-12 col-md-5'i><'col-sm-12 col-md-7'p>>",
+            pageLength: 10
+        });
+
+        // PDF Preview Handler
         $('.btn-show-detail').on('click', function() {
             const d = $(this).data();
-            $('#view-tipe').text('(' + d.tipe + ')'); $('#view-perihal').text(d.perihal);
-            $('#view-nomor').text(d.nomor); $('#view-asal').text(d.asal);
-            $('#view-tgl-surat').text(d.tglSurat); $('#view-tgl-terima').text(d.tglTerima);
-            $('#view-catatan').text(d.catatan); $('#view-download').attr('href', d.file);
             const w = $('#view-file-wrapper').empty();
+            
             if (d.file && d.file !== '#' && d.file !== '/storage/') {
-                const ext = d.file.split('.').pop().toLowerCase();
-                if (ext === 'pdf') w.html(`<iframe src="${d.file}" width="100%" height="600px" style="border:none;"></iframe>`);
-                else if (['jpg', 'jpeg', 'png'].includes(ext)) w.html(`<img src="${d.file}" class="img-fluid" style="max-height: 600px; object-fit: contain;">`);
-            } else w.html('<div class="text-white text-center p-5"><p>File tidak tersedia.</p></div>');
+                w.html(`<iframe src="${d.file}" width="100%" height="100%" style="border:none;"></iframe>`);
+            } else {
+                w.html(`
+                    <div class="h-100 d-flex flex-column align-items-center justify-content-center text-muted">
+                        <div class="bg-white p-5 rounded-circle shadow-sm mb-3">
+                            <i class="bi bi-file-earmark-x display-4 text-danger"></i>
+                        </div>
+                        <h6 class="fw-bold">Berkas Tidak Ditemukan</h6>
+                        <p class="small text-center px-4">Maaf, berkas PDF untuk surat ini tidak tersedia di server atau tautan sudah kadaluarsa.</p>
+                    </div>
+                `);
+            }
         });
     });
 </script>

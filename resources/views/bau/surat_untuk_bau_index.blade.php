@@ -524,46 +524,49 @@
 
             <div class="modal-content border-0 shadow">
                 <div class="modal-header bg-primary text-white">
-                    <h5 class="modal-title"><i class="bi bi-person-up me-2"></i> Delegasikan Surat (BAU)</h5>
+                    <h5 class="modal-title"><i class="bi bi-person-up me-2"></i> Delegasikan Surat</h5>
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
                     <div class="mb-3">
-                        <label class="small fw-bold">Perihal Surat</label>
-                        <p id="text_perihal" class="text-muted small italic"></p>
+                        <label class="small fw-bold text-uppercase">Perihal Surat</label>
+                        <div id="text_perihal" class="p-2 border rounded bg-light small italic"></div>
                     </div>
 
                     <div class="mb-3">
                         <label class="small fw-bold">Opsi Delegasi</label>
                         <select name="target_tipe" id="target_tipe" class="form-select shadow-sm" required onchange="togglePegawaiBAU()">
                             <option value="pribadi">Pegawai Spesifik (Disposisi)</option>
-                            <option value="semua">Sebar ke Semua Pegawai (Informasi)</option>
+                            <option value="semua">Sebarkan ke Semua Pegawai (Informasi)</option>
                         </select>
                     </div>
 
                     <div class="mb-3" id="group_pegawai">
-                        <label class="small fw-bold">Pilih Pegawai (Bisa lebih dari satu)</label>
+                        <label class="small fw-bold">Pilih Pegawai Penerima</label>
                         <select name="user_id[]" id="select_pegawai" class="form-select shadow-sm select2-bau" multiple="multiple">
                             @foreach($pegawaiList as $p)
-                                <option value="{{ $p->id }}">{{ $p->name }}</option>
+                                {{-- Filter: Jangan tampilkan nama diri sendiri (Kepala Satker) --}}
+                                @if($p->id !== Auth::id())
+                                    <option value="{{ $p->id }}">{{ $p->name }}</option>
+                                @endif
                             @endforeach
                         </select>
                     </div>
 
                     <div id="group_instruksi">
                         <div class="mb-3">
-                            <label class="small fw-bold">Klasifikasi / Instruksi</label>
+                            <label class="small fw-bold">Instruksi / Klasifikasi</label>
                             <input type="text" name="klasifikasi" id="input_klasifikasi" class="form-control shadow-sm" placeholder="Contoh: Segera tindak lanjuti" required>
                         </div>
                         <div class="mb-0">
                             <label class="small fw-bold">Catatan Tambahan</label>
-                            <textarea name="catatan" id="input_catatan" class="form-control shadow-sm" rows="3" placeholder="Masukkan instruksi khusus..."></textarea>
+                            <textarea name="catatan" id="input_catatan" class="form-control shadow-sm" rows="3" placeholder="Masukkan detail instruksi jika ada..."></textarea>
                         </div>
                     </div>
                 </div>
                 <div class="modal-footer bg-light">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
-                    <button type="submit" class="btn btn-primary">Kirim Delegasi</button>
+                    <button type="submit" class="btn btn-primary px-4">Kirim Delegasi</button>
                 </div>
             </div>
         </form>
@@ -596,7 +599,7 @@
 
 <script>
 $(document).ready(function() {
-    // 1. Inisialisasi Select2
+    // 1. Inisialisasi Select2 dengan pengamanan dropdownParent
     function initSelect2() {
         $('.select2-bau').select2({
             theme: 'bootstrap-5',
@@ -607,51 +610,57 @@ $(document).ready(function() {
         });
     }
 
-    // 2. Passing data ke modal
+    // 2. Event saat modal akan ditampilkan
     $('#delegasiModalBAU').on('show.bs.modal', function (event) {
         var button = $(event.relatedTarget); 
         var id = button.data('id');
         var perihal = button.data('perihal');
         var tabel = button.data('tabel'); 
 
-        $(this).find('form')[0].reset();
+        // Reset form setiap kali modal dibuka
+        var form = $(this).find('form')[0];
+        form.reset();
         
-        // Bersihkan select2 lama jika ada
+        // Bersihkan Select2
         if ($('.select2-bau').data('select2')) {
             $('.select2-bau').val(null).trigger('change');
         }
 
+        // Isi data hidden input
         $('#delegasi_surat_id').val(id);
         $('#delegasi_asal_tabel').val(tabel);
         $('#text_perihal').text(perihal);
         
-        togglePegawaiBAU();
+        // Atur tampilan awal berdasarkan opsi default
+        setTimeout(togglePegawaiBAU, 200);
     });
 
-    // Jalankan init saat modal ditampilkan sempurna
     $('#delegasiModalBAU').on('shown.bs.modal', function () {
         initSelect2();
     });
 });
 
-// 3. Fungsi Toggle
+// 3. Fungsi Toggle yang lebih bersih
 function togglePegawaiBAU() {
     const tipe = document.getElementById('target_tipe').value;
     const groupPegawai = document.getElementById('group_pegawai');
     const groupInstruksi = document.getElementById('group_instruksi');
     const inputKlasifikasi = document.getElementById('input_klasifikasi');
-    const selectPegawai = document.getElementById('select_pegawai');
+    const selectPegawai = $('#select_pegawai'); // Gunakan jQuery untuk Select2
 
     if (tipe === 'semua') {
-        groupPegawai.style.display = 'none';
-        groupInstruksi.style.display = 'none';
+        // Mode Sebar Semua
+        $(groupPegawai).hide();
+        $(groupInstruksi).hide();
         inputKlasifikasi.removeAttribute('required');
-        selectPegawai.removeAttribute('required');
-        $('.select2-bau').val(null).trigger('change');
+        selectPegawai.val(null).trigger('change');
+        selectPegawai.prop('required', false);
     } else {
-        groupPegawai.style.display = 'block';
-        groupInstruksi.style.display = 'block';
+        // Mode Disposisi Spesifik
+        $(groupPegawai).show();
+        $(groupInstruksi).show();
         inputKlasifikasi.setAttribute('required', 'required');
+        selectPegawai.prop('required', true);
     }
 }
 </script>
